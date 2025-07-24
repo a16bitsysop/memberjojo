@@ -1,16 +1,28 @@
+"""
+Common class to base other modules from
+includes some helper functions
+"""
+
 import sqlite3
 
 
 class MojoSkel:
-    def __init__(self, DBpath, TableName):
-        try:
-            self.conn = sqlite3.connect(DBpath)
-        except sqlite3.Error as e:
-            raise RuntimeError(f"❌ SQLite init error: {e}")
+    """
+    Base class for the other memberjojo modules
+    """
 
-        self.conn.row_factory = sqlite3.Row  # Enables name-based access to columns
+    def __init__(self, db_path, table_name):
+        """
+        connect to database and set factory for name based access to columns
+        """
+        try:
+            self.conn = sqlite3.connect(db_path)
+        except sqlite3.Error as e:
+            raise RuntimeError(f"❌ SQLite init error: {e}") from e
+
+        self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
-        self.table_name = TableName
+        self.table_name = table_name
 
     def show_table(self, limit=2):
         """

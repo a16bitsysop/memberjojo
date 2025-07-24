@@ -1,3 +1,7 @@
+"""
+Tests for the transaction module
+"""
+
 import sqlite3
 import tempfile
 import os
@@ -5,7 +9,6 @@ import csv
 import pytest
 
 from memberjojo import Transaction  # Update with your actual module name
-from memberjojo.config import CSV_ENCODING  # Assumes config is accessible
 
 # --- Fixtures & Helpers ---
 
@@ -20,16 +23,15 @@ def csv_file():
         {"id": "2", "amount": "200", "desc": "Withdrawal"},
         {"id": "3", "amount": "150", "desc": "Refund"},
     ]
-    tmp_file = tempfile.NamedTemporaryFile(
+    with tempfile.NamedTemporaryFile(
         delete=False, mode="w", newline="", suffix=".csv"
-    )
-    writer = csv.DictWriter(tmp_file, fieldnames=["id", "amount", "desc"])
-    writer.writeheader()
-    for row in data:
-        writer.writerow(row)
-    tmp_file.close()
-    yield tmp_file.name
-    os.remove(tmp_file.name)
+    ) as tmp_file:
+        writer = csv.DictWriter(tmp_file, fieldnames=["id", "amount", "desc"])
+        writer.writeheader()
+        for row in data:
+            writer.writerow(row)
+        yield tmp_file.name
+        os.remove(tmp_file.name)
 
 
 @pytest.fixture
@@ -45,11 +47,14 @@ def db_connection():
 # --- Tests ---
 
 
-def test_import_with_custom_primary_key(csv_file, db_connection):
-    txn = Transaction(db_connection, TableName = "transactions")
+def test_import_with_custom_primary_key(test_csv_file, test_db_connection):
+    """
+    test_import_with_custom_primary_key
+    """
+    txn = Transaction(test_db_connection, TableName="transactions")
 
     # Import using 'id' as the PK
-    txn.import_csv(csv_file, PKcolumn="id")
+    txn.import_csv(test_csv_file, PKcolumn="id")
 
     # Check that 'id' is used as primary key
     txn.cursor.execute("PRAGMA table_info(transactions)")
@@ -67,19 +72,24 @@ def test_import_with_custom_primary_key(csv_file, db_connection):
     assert row["amount"] == 200.0
 
 
-def test_duplicate_primary_key_ignored(csv_file, db_connection):
-    txn = Transaction(db_connection)
-    txn.import_csv(csv_file, PKcolumn="id")
+def test_duplicate_primary_key_ignored(test_csv_file, test_db_connection):
+    """
+    test_duplicate_primary_key_ignored
+    """
+    txn = Transaction(test_db_connection)
+    txn.import_csv(test_csv_file, PKcolumn="id")
 
     # Re-import same CSV — should ignore duplicates due to OR IGNORE
-    txn.import_csv(csv_file, PKcolumn="id")
+    txn.import_csv(test_csv_file, PKcolumn="id")
 
     assert txn.count() == 3  # No duplicates added
 
 
-def test_invalid_primary_key_raises(csv_file, db_connection):
-    txn = Transaction(db_connection)
+def test_invalid_primary_key_raises(test_csv_file, test_db_connection):
+    """
+    test_invalid_primary_key_raises
+    """
+    txn = Transaction(test_db_connection)
 
     with pytest.raises(ValueError, match="Primary key column 'uuid' not found in CSV"):
-        txn.import_csv(csv_file, PKcolumn="uuid")
-        
+        txn.import_csv(test_csv_file, PKcolumn="uuid")

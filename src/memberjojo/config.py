@@ -1,3 +1,5 @@
-# config
-# CSV_ENCODING = "ISO-8859-1"
+"""
+config
+"""
+
 CSV_ENCODING = "UTF-8"

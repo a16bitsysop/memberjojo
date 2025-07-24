@@ -1,3 +1,7 @@
+"""
+Tests for the member module
+"""
+
 import sqlite3
 import tempfile
 import os
@@ -5,9 +9,6 @@ import csv
 import pytest
 from memberjojo import Member
 
-"""
-Test for the member module
-"""
 
 @pytest.fixture
 def mock_csv_file():
