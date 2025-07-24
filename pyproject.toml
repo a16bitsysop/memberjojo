@@ -1,0 +1,18 @@
+[build-system]
+requires = ["flit_core >=3.11,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "memberjojo"
+authors = [{name = "Duncan Bellamy", email = "dunk@denkimushi.com"}]
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+dynamic = ["version", "description"]
+
+[project.urls]
+Home = "https://github.com/a16bitsysop/memberjojo"
+
+[tool.pytest.ini_options]
+pythonpath = [ "src" ]
+
