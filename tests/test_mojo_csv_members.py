@@ -9,6 +9,7 @@ import csv
 import pytest
 from memberjojo import Member
 
+# pylint: disable=redefined-outer-name
 
 @pytest.fixture
 def mock_csv_file():
@@ -85,23 +86,23 @@ def member_db():
     return Member(conn)
 
 
-def test_member_import_and_validation(test_member_db, test_mock_csv_file):
+def test_member_import_and_validation(member_db, mock_csv_file):
     """
     Test importing valid/invalid members from CSV.
     """
-    test_member_db.import_csv(test_mock_csv_file)
+    member_db.import_csv(mock_csv_file)
 
     # Valid inserts
-    assert test_member_db.get_number("john", "doe") == 1
-    assert test_member_db.get_number("Jane", "Smith") == 2
+    assert member_db.get_number("john", "doe") == 1
+    assert member_db.get_number("Jane", "Smith") == 2
 
     # Should not be inserted due to duplicate membermojo ID
-    assert test_member_db.get_number("Emily", "Stone") is None
+    assert member_db.get_number("Emily", "Stone") is None
 
     # Should not be inserted due to duplicate member_number
-    assert test_member_db.get_number("Sara", "Connor") is None
+    assert member_db.get_number("Sara", "Connor") is None
 
     # Should not be inserted due to invalid title
-    assert test_member_db.get_number("Rick", "Grimes") is None
+    assert member_db.get_number("Rick", "Grimes") is None
 
-    os.remove(test_mock_csv_file)  # Clean up
+    os.remove(mock_csv_file)  # Clean up

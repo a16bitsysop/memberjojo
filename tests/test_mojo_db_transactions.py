@@ -11,7 +11,7 @@ import pytest
 from memberjojo import Transaction  # Update with your actual module name
 
 # --- Fixtures & Helpers ---
-
+# pylint: disable=redefined-outer-name
 
 @pytest.fixture
 def csv_file():
