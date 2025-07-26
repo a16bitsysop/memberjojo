@@ -2,17 +2,19 @@
 Tests for the member module
 """
 
-import sqlite3
-import tempfile
-import os
 import csv
+import os
+import tempfile
+from pathlib import Path
+
 import pytest
 from memberjojo import Member
 
 # pylint: disable=redefined-outer-name
 
+
 @pytest.fixture
-def mock_csv_file():
+def mock_csv_file(tmp_path):
     """
     Create a temporary mock CSV file for testing.
     Returns path to the CSV.
@@ -68,41 +70,44 @@ def mock_csv_file():
         },  # invalid title
     ]
 
-    with tempfile.NamedTemporaryFile(
-        delete=False, suffix=".csv", mode="w", encoding="ISO-8859-1", newline=""
-    ) as f:
+    csv_path = tmp_path / "mock_data.csv"
+    with csv_path.open(mode="w", encoding="ISO-8859-1", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
-        return f.name  # Return path to CSV
+
+    return str(csv_path)
 
 
 @pytest.fixture
-def member_db():
+def db_path():
     """
-    Provides an in-memory Member database instance.
+    Temp file for db connection
     """
-    conn = sqlite3.connect(":memory:")
-    return Member(conn)
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        path = tmp.name
+    yield path
+    os.remove(path)
 
 
-def test_member_import_and_validation(member_db, mock_csv_file):
+def test_member_import_and_validation(db_path, mock_csv_file):
     """
     Test importing valid/invalid members from CSV.
     """
-    member_db.import_csv(mock_csv_file)
+    member_db = Member(db_path)
+    member_db.import_csv(Path(mock_csv_file))
 
     # Valid inserts
-    assert member_db.get_number("john", "doe") == 1
-    assert member_db.get_number("Jane", "Smith") == 2
+    assert member_db.get_number_first_last("john", "doe") == 1
+    assert member_db.get_number("Jane Smith") == 2
 
     # Should not be inserted due to duplicate membermojo ID
-    assert member_db.get_number("Emily", "Stone") is None
+    assert member_db.get_number_first_last("Emily", "Stone") is None
 
     # Should not be inserted due to duplicate member_number
-    assert member_db.get_number("Sara", "Connor") is None
+    assert member_db.get_number("Sara Connor") is None
 
     # Should not be inserted due to invalid title
-    assert member_db.get_number("Rick", "Grimes") is None
+    assert member_db.get_number_first_last("Rick", "Grimes") is None
 
     os.remove(mock_csv_file)  # Clean up
