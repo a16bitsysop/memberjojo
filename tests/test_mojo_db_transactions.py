@@ -3,7 +3,6 @@ Tests for the transaction module
 """
 
 import tempfile
-import os
 import csv
 from pathlib import Path
 
@@ -41,9 +40,9 @@ def db_path():
     Temp file for db connection
     """
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
-        path = tmp.name
+        path = Path(tmp.name)
     yield path
-    os.remove(path)
+    path.unlink()
 
 
 @pytest.mark.parametrize(
@@ -88,7 +87,22 @@ def test_empty_csv_import(tmp_path, db_path):
 
     # Use it in your import
     with pytest.raises(ValueError, match="CSV file is empty."):
-        txn.import_csv(empty_csv, pk_column="id")
+        txn.import_csv(empty_csv)
+
+
+def test_create_table_with_default_pk(csv_file, db_path):
+    """
+    Test _create_tables uses first column as primary key when pk_column is None.
+    """
+    txn = Transaction(db_path, table_name="auto_pk_table")
+    txn.import_csv(Path(csv_file))  # No pk_column provided
+
+    # Validate schema — first column should be the primary key
+    txn.cursor.execute("PRAGMA table_info(auto_pk_table)")
+    schema = txn.cursor.fetchall()
+    pk_cols = [col["name"] for col in schema if col["pk"] == 1]
+
+    assert pk_cols == ["id"]
 
 
 def test_invalid_csv_path_message(tmp_path, db_path, capsys):
@@ -121,7 +135,15 @@ def test_type_mismatch_in_second_import_raises(tmp_path, db_path):
     # Second CSV: invalid amount type
     invalid_csv = tmp_path / "invalid.csv"
     invalid_csv.write_text(
-        ("id,amount,desc\n" + "3,not_a_number,Invalid Amount\n"),
+        (
+            "id,amount,desc\n"
+            + "3,not_a_number,Invalid Amount\n"
+            + "6,not_a_number,Invalid Amount\n"
+            + "7,not_a_number1,Invalid Amount\n"
+            + "8,not_a_number2,Invalid Amount\n"
+            + "9,not_a_number3,Invalid Amount\n"
+            + "10,not_a_number4,Invalid Amount\n"
+        ),
         encoding="utf-8",
     )
 
@@ -156,6 +178,21 @@ def test_import_with_custom_primary_key(csv_file, db_path):
     assert row is not None
     assert row["desc"] == "Withdrawal"
     assert row["amount"] == 200.0
+    # Test null entry_value
+    assert txn.get_row("id", "") is None
+
+
+def test_import_missing_primary_key(csv_file, db_path):
+    """
+    test_import_with_custom_primary_key
+    """
+    txn = Transaction(db_path, table_name="transactions")
+
+    with pytest.raises(
+        ValueError, match="Primary key column 'none_id' not found in CSV."
+    ):
+        # Import using 'none_id' as the PK
+        txn.import_csv(Path(csv_file), pk_column="none_id")
 
 
 def test_duplicate_primary_key_ignored(csv_file, db_path):
@@ -169,16 +206,6 @@ def test_duplicate_primary_key_ignored(csv_file, db_path):
     txn.import_csv(Path(csv_file), pk_column="id")
 
     assert txn.count() == 5  # No duplicates added
-
-
-def test_invalid_primary_key_raises(csv_file, db_path):
-    """
-    test_invalid_primary_key_raises
-    """
-    txn = Transaction(db_path)
-
-    with pytest.raises(ValueError, match="Primary key column 'uuid' not found in CSV"):
-        txn.import_csv(Path(csv_file), pk_column="uuid")
 
 
 def test_get_row_multi(csv_file, db_path):
