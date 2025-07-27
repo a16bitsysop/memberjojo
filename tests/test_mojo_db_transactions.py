@@ -31,7 +31,7 @@ def csv_file(tmp_path):
         writer = csv.DictWriter(f, fieldnames=["id", "amount", "desc"])
         writer.writeheader()
         writer.writerows(data)
-    return str(path)
+    return Path(path)
 
 
 @pytest.fixture
@@ -43,6 +43,16 @@ def db_path():
         path = Path(tmp.name)
     yield path
     path.unlink()
+
+
+@pytest.fixture
+def payment_db(db_path, csv_file):
+    """
+    Test sqlite transaction database
+    """
+    test_db = Transaction(db_path)
+    test_db.import_csv(csv_file, pk_column="id")
+    return test_db
 
 
 @pytest.mark.parametrize(
@@ -161,25 +171,25 @@ def test_import_with_custom_primary_key(csv_file, db_path):
     """
     txn = Transaction(db_path, table_name="transactions")
 
-    # Import using 'id' as the PK
-    txn.import_csv(Path(csv_file), pk_column="id")
+    # Import using 'amount' as the PK
+    txn.import_csv(Path(csv_file), pk_column="amount")
 
-    # Check that 'id' is used as primary key
+    # Check that 'amount' is used as primary key
     txn.cursor.execute("PRAGMA table_info(transactions)")
     schema = txn.cursor.fetchall()
     pk_columns = [col["name"] for col in schema if col["pk"] == 1]
-    assert pk_columns == ["id"], "Expected 'id' to be primary key"
+    assert pk_columns == ["amount"], "Expected 'amount' to be primary key"
 
     # Check row count
     assert txn.count() == 5
 
     # Retrieve row by primary key
-    row = txn.get_row("id", "2")
+    row = txn.get_row("amount", 200.0)
     assert row is not None
     assert row["desc"] == "Withdrawal"
-    assert row["amount"] == 200.0
+    assert row["id"] == 2
     # Test null entry_value
-    assert txn.get_row("id", "") is None
+    assert txn.get_row("amount", "") is None
 
 
 def test_import_missing_primary_key(csv_file, db_path):
@@ -195,40 +205,36 @@ def test_import_missing_primary_key(csv_file, db_path):
         txn.import_csv(Path(csv_file), pk_column="none_id")
 
 
-def test_duplicate_primary_key_ignored(csv_file, db_path):
+def test_duplicate_primary_key_ignored(payment_db, csv_file):
     """
     test_duplicate_primary_key_ignored
     """
-    txn = Transaction(db_path)
-    txn.import_csv(Path(csv_file), pk_column="id")
 
     # Re-import same CSV — should ignore duplicates due to OR IGNORE
-    txn.import_csv(Path(csv_file), pk_column="id")
+    payment_db.import_csv(Path(csv_file), pk_column="id")
 
-    assert txn.count() == 5  # No duplicates added
+    assert payment_db.count() == 5  # No duplicates added
 
 
-def test_get_row_multi(csv_file, db_path):
+def test_get_row_multi(payment_db):
     """
     Test retrieving a row using multiple column conditions
     """
-    txn = Transaction(db_path, table_name="transactions")
-    txn.import_csv(Path(csv_file), pk_column="id")
 
     # Exact match for id=2 and desc='Withdrawal'
-    row = txn.get_row_multi({"id": "2", "desc": "Withdrawal"})
+    row = payment_db.get_row_multi({"id": "2", "desc": "Withdrawal"})
     assert row is not None
     assert row["id"] == 2
     assert row["desc"] == "Withdrawal"
     assert row["amount"] == 200.0
 
     # Match with numeric and empty string
-    row = txn.get_row_multi({"id": "5", "desc": ""})
+    row = payment_db.get_row_multi({"id": "5", "desc": ""})
     assert row is not None
     assert row["id"] == 5
     assert row["desc"] is None
     assert row["amount"] == 345.0
 
     # No match
-    row = txn.get_row_multi({"id": "3", "desc": "Not a match"})
+    row = payment_db.get_row_multi({"id": "3", "desc": "Not a match"})
     assert row is None

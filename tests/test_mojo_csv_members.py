@@ -77,7 +77,7 @@ def mock_csv_file(tmp_path):
         writer.writeheader()
         writer.writerows(rows)
 
-    return str(csv_path)
+    return Path(csv_path)
 
 
 @pytest.fixture
@@ -97,7 +97,7 @@ def member_db(db_path, mock_csv_file):
     Test sqlite member database
     """
     test_db = Member(db_path)
-    test_db.import_csv(Path(mock_csv_file))
+    test_db.import_csv(mock_csv_file)
     return test_db
 
 
