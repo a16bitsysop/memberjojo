@@ -139,6 +139,8 @@ def test_member_import_and_validation(member_db):
     assert member_db.get_number_first_last("john", "doe") == 1
     assert member_db.get_number("Jane Smith") == 2
     assert member_db.get_name(2) == "Jane Smith"
+    # Invalid member number
+    assert member_db.get_name(888) is None
 
     # Should not be inserted due to duplicate membermojo ID
     assert member_db.get_number_first_last("Emily", "Stone") is None

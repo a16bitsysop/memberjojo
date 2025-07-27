@@ -192,17 +192,15 @@ class Transaction(MojoSkel):
         Return the first row matching multiple column = value pairs (case-insensitive).
         Accepts a dictionary: {column: value}
         """
-        if not match_dict:
-            return None
+        conditions = []
+        values = []
+        for col, val in match_dict.items():
+            if val is None or val == "":
+                conditions.append(f'"{col}" IS NULL')
+            else:
+                conditions.append(f'"{col}" = ?')
+                values.append(val)
 
-        keys = list(match_dict.keys())
-        values = list(match_dict.values())
-
-        conditions = [f'LOWER("{key}") = LOWER(?)' for key in keys]
-        where_clause = " AND ".join(conditions)
-
-        query = f"SELECT * FROM {self.table_name} WHERE {where_clause}"
+        query = f'SELECT * FROM "{self.table_name}" WHERE {" AND ".join(conditions)} LIMIT 1'
         self.cursor.execute(query, values)
-        row = self.cursor.fetchone()
-
-        return dict(row) if row else None
+        return self.cursor.fetchone()

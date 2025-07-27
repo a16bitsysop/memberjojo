@@ -46,7 +46,28 @@ def db_path():
     os.remove(path)
 
 
+@pytest.mark.parametrize(
+    "input_value, expected",
+    [
+        (None, "TEXT"),
+        ("", "TEXT"),
+        ("abc", "TEXT"),
+        ("123", "INTEGER"),
+        ("123.45", "REAL"),
+        ("   42   ", "INTEGER"),  # whitespace-trimmed input
+    ],
+)
+
+
 # --- Tests ---
+
+
+def test_guess_type_various(input_value, expected):
+    """
+    Test all the code paths in _guess_type
+    """
+    txn = Transaction(":memory:")
+    assert txn._guess_type(input_value) == expected  # pylint: disable=protected-access
 
 
 def test_empty_csv_import(tmp_path, db_path):
@@ -158,3 +179,29 @@ def test_invalid_primary_key_raises(csv_file, db_path):
 
     with pytest.raises(ValueError, match="Primary key column 'uuid' not found in CSV"):
         txn.import_csv(Path(csv_file), pk_column="uuid")
+
+
+def test_get_row_multi(csv_file, db_path):
+    """
+    Test retrieving a row using multiple column conditions
+    """
+    txn = Transaction(db_path, table_name="transactions")
+    txn.import_csv(Path(csv_file), pk_column="id")
+
+    # Exact match for id=2 and desc='Withdrawal'
+    row = txn.get_row_multi({"id": "2", "desc": "Withdrawal"})
+    assert row is not None
+    assert row["id"] == 2
+    assert row["desc"] == "Withdrawal"
+    assert row["amount"] == 200.0
+
+    # Match with numeric and empty string
+    row = txn.get_row_multi({"id": "5", "desc": ""})
+    assert row is not None
+    assert row["id"] == 5
+    assert row["desc"] is None
+    assert row["amount"] == 345.0
+
+    # No match
+    row = txn.get_row_multi({"id": "3", "desc": "Not a match"})
+    assert row is None
