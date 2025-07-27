@@ -24,6 +24,8 @@ def csv_file(tmp_path):
         {"id": "1", "amount": "100.5", "desc": "Deposit"},
         {"id": "2", "amount": "200", "desc": "Withdrawal"},
         {"id": "3", "amount": "150", "desc": "Refund"},
+        {"id": "4", "amount": "175", "desc": None},
+        {"id": "5", "amount": "345", "desc": ""},
     ]
     with path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["id", "amount", "desc"])
@@ -46,6 +48,69 @@ def db_path():
 # --- Tests ---
 
 
+def test_empty_csv_import(tmp_path, db_path):
+    """
+    Test importing empty and just header csv
+    """
+    txn = Transaction(db_path)
+    empty_csv = tmp_path / "empty.csv"
+    empty_csv.write_text("", encoding="utf-8")  # Fully empty
+
+    assert empty_csv.exists()
+    assert empty_csv.stat().st_size == 0
+    with pytest.raises(ValueError, match="CSV file is empty."):
+        txn.import_csv(empty_csv)
+
+    # OR with only headers
+    empty_csv.write_text("id,amount,desc\n", encoding="utf-8")
+
+    # Use it in your import
+    with pytest.raises(ValueError, match="CSV file is empty."):
+        txn.import_csv(empty_csv, pk_column="id")
+
+
+def test_invalid_csv_path_message(tmp_path, db_path, capsys):
+    """
+    Test import non existing csv file
+    """
+    non_exist = Path(tmp_path, "non-exist.csv")
+    txn = Transaction(db_path)
+    txn.import_csv(non_exist)
+    # Capture stdout
+    captured = capsys.readouterr()
+    assert "CSV file not found" in captured.out
+    assert str(non_exist) in captured.out
+
+
+def test_type_mismatch_in_second_import_raises(tmp_path, db_path):
+    """
+    Import valid CSV first. Then try a second CSV with invalid type, and ensure it raises.
+    """
+    txn = Transaction(db_path, table_name="payments")
+
+    # First CSV: valid
+    valid_csv = tmp_path / "valid.csv"
+    valid_csv.write_text(
+        ("id,amount,desc\n" + "1,100.0,Deposit\n" + "2,200.0,Withdrawal\n"),
+        encoding="utf-8",
+    )
+    txn.import_csv(valid_csv, pk_column="id")
+
+    # Second CSV: invalid amount type
+    invalid_csv = tmp_path / "invalid.csv"
+    invalid_csv.write_text(
+        ("id,amount,desc\n" + "3,not_a_number,Invalid Amount\n"),
+        encoding="utf-8",
+    )
+
+    # Reuse the same txn instance so the schema remains
+    with pytest.raises(ValueError, match="Failed to import:"):
+        txn.import_csv(invalid_csv, pk_column="id")
+
+    # Ensure the invalid row was not inserted
+    assert txn.count() == 2
+
+
 def test_import_with_custom_primary_key(csv_file, db_path):
     """
     test_import_with_custom_primary_key
@@ -62,7 +127,7 @@ def test_import_with_custom_primary_key(csv_file, db_path):
     assert pk_columns == ["id"], "Expected 'id' to be primary key"
 
     # Check row count
-    assert txn.count() == 3
+    assert txn.count() == 5
 
     # Retrieve row by primary key
     row = txn.get_row("id", "2")
@@ -81,7 +146,7 @@ def test_duplicate_primary_key_ignored(csv_file, db_path):
     # Re-import same CSV — should ignore duplicates due to OR IGNORE
     txn.import_csv(Path(csv_file), pk_column="id")
 
-    assert txn.count() == 3  # No duplicates added
+    assert txn.count() == 5  # No duplicates added
 
 
 def test_invalid_primary_key_raises(csv_file, db_path):

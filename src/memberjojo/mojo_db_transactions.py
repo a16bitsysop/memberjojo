@@ -122,7 +122,11 @@ class Transaction(MojoSkel):
                 sample_rows = [row for _, row in zip(range(sample_size), reader)]
                 if not sample_rows:
                     raise ValueError("CSV file is empty.")
-                self._infer_columns_from_rows(sample_rows)
+
+                # Only infer columns if not already set (i.e., first import)
+                if not self.columns:
+                    self._infer_columns_from_rows(sample_rows)
+
         except FileNotFoundError:
             print(f"CSV file not found: {csv_path}")
             return
@@ -148,7 +152,12 @@ class Transaction(MojoSkel):
                         insert_stmt, self._parse_row_values(row, self.columns)
                     )
 
-                except (IntegrityError, OperationalError, DatabaseError) as e:
+                except (
+                    IntegrityError,
+                    OperationalError,
+                    DatabaseError,
+                    ValueError,
+                ) as e:
                     failed_rows.append((row.copy(), str(e)))
 
             self.conn.commit()

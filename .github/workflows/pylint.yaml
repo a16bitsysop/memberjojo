@@ -3,7 +3,7 @@ name: pylint and pytest
 on: [push, pull_request]
 
 jobs:
-  lint:
+  pylint_pytest:
     runs-on: ubuntu-latest
 
     steps:

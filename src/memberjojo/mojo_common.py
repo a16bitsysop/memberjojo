@@ -15,10 +15,7 @@ class MojoSkel:
         """
         connect to database and set factory for name based access to columns
         """
-        try:
-            self.conn = sqlite3.connect(db_path)
-        except sqlite3.Error as e:
-            raise RuntimeError(f"❌ SQLite init error: {e}") from e
+        self.conn = sqlite3.connect(db_path)
 
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()

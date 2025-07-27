@@ -90,16 +90,37 @@ def db_path():
     os.remove(path)
 
 
-def test_member_import_and_validation(db_path, mock_csv_file):
+@pytest.fixture
+def member_db(db_path, mock_csv_file):
+    """
+    Test sqlite member database
+    """
+    test_db = Member(db_path)
+    test_db.import_csv(Path(mock_csv_file))
+    return test_db
+
+
+def test_invalid_csv_path_message(tmp_path, db_path, capsys):
+    """
+    Test import non existing csv file
+    """
+    non_exist = Path(tmp_path, "non-exist.csv")
+    txn = Member(db_path)
+    txn.import_csv(non_exist)
+    # Capture stdout
+    captured = capsys.readouterr()
+    assert "CSV file not found" in captured.out
+    assert str(non_exist) in captured.out
+
+
+def test_member_import_and_validation(member_db):
     """
     Test importing valid/invalid members from CSV.
     """
-    member_db = Member(db_path)
-    member_db.import_csv(Path(mock_csv_file))
-
     # Valid inserts
     assert member_db.get_number_first_last("john", "doe") == 1
     assert member_db.get_number("Jane Smith") == 2
+    assert member_db.get_name(2) == "Jane Smith"
 
     # Should not be inserted due to duplicate membermojo ID
     assert member_db.get_number_first_last("Emily", "Stone") is None
@@ -110,4 +131,23 @@ def test_member_import_and_validation(db_path, mock_csv_file):
     # Should not be inserted due to invalid title
     assert member_db.get_number_first_last("Rick", "Grimes") is None
 
-    os.remove(mock_csv_file)  # Clean up
+
+def test_show_table(member_db):
+    """
+    Test the show table function
+    """
+    # Should be equal as default show_table is 5 entries and member_db is 2
+    entries = member_db.count()
+    assert entries == 2
+    assert member_db.show_table() == member_db.show_table(100)
+    assert member_db.show_table(entries) == member_db.show_table(100)
+
+
+def test_get_number_first_last_not_found_raises(member_db):
+    """
+    Test found_error
+    """
+    with pytest.raises(
+        ValueError, match=r"❌ Cannot find: John Snow in member database."
+    ):
+        member_db.get_number_first_last("John", "Snow", found_error=True)
