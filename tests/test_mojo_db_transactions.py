@@ -10,8 +10,9 @@ from pathlib import Path
 import pytest
 from memberjojo import Transaction  # Update with your actual module name
 
-# --- Fixtures & Helpers ---
 # pylint: disable=redefined-outer-name
+# or pylint thinks fixtures are redined as function variables
+# --- Fixtures & Helpers ---
 
 
 @pytest.fixture

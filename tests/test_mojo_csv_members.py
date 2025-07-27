@@ -2,15 +2,16 @@
 Tests for the member module
 """
 
-import csv
-import os
-import tempfile
+from csv import DictWriter
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import pytest
 from memberjojo import Member
 
 # pylint: disable=redefined-outer-name
+# or pylint thinks fixtures are redined as function variables
+# --- Fixtures & Helpers ---
 
 
 @pytest.fixture
@@ -72,7 +73,7 @@ def mock_csv_file(tmp_path):
 
     csv_path = tmp_path / "mock_data.csv"
     with csv_path.open(mode="w", encoding="ISO-8859-1", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer = DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
@@ -84,10 +85,10 @@ def db_path():
     """
     Temp file for db connection
     """
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
-        path = tmp.name
+    with NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        path = Path(tmp.name)
     yield path
-    os.remove(path)
+    path.unlink()
 
 
 @pytest.fixture
@@ -98,6 +99,23 @@ def member_db(db_path, mock_csv_file):
     test_db = Member(db_path)
     test_db.import_csv(Path(mock_csv_file))
     return test_db
+
+
+# --- Tests ---
+
+
+def test_empty_db(capsys):
+    """
+    Test empty db
+    """
+    with NamedTemporaryFile(suffix=".db") as tmp:
+        empty_db = Member(tmp.name)
+        # create tables so is empty database
+        empty_db._create_tables()  # pylint: disable=protected-access
+        empty_db.show_table()
+        captured = capsys.readouterr()
+        assert "(No data)" in captured.out
+        assert empty_db.count() == 0
 
 
 def test_invalid_csv_path_message(tmp_path, db_path, capsys):
