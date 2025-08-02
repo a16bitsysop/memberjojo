@@ -1,6 +1,8 @@
 """
-Module to create an sqlite databse from a downloaded membermojo members.csv
-Provides functions to interacte with it as well
+Member module for creating and interacting with a SQLite database.
+
+This module loads data from a `members.csv` file downloaded from Membermojo,
+stores it in SQLite, and provides helper functions for member lookups.
 """
 
 from csv import DictReader
@@ -13,7 +15,15 @@ from .mojo_common import MojoSkel
 @dataclass
 class MemberData:
     """
-    class to hold the member data used in sqlite calls
+    A dataclass to represent a single member's data for database operations.
+
+    Attributes:
+        member_num (int): Unique member number (primary key).
+        title (str): Title (e.g., Mr, Mrs, Ms).
+        first_name (str): Member's first name.
+        last_name (str): Member's last name.
+        membermojo_id (int): Unique Membermojo ID.
+        short_url (str): Short URL to Membermojo profile.
     """
 
     member_num: int
@@ -26,15 +36,28 @@ class MemberData:
 
 class Member(MojoSkel):
     """
-    The Member class is used to contain these funcitons
+    Subclass of MojoSkel providing member-specific database functions.
+
+    This class connects to a SQLite database and supports importing member data
+    from CSV and performing queries like lookup by name or member number.
     """
 
     def __init__(self, member_db_path, table_name=None):
+        """
+        Initialize the Member database handler.
+
+        Args:
+            member_db_path (str): Path to the SQLite database file.
+            table_name (str, optional): Table name to use. Defaults to "members".
+        """
         super().__init__(member_db_path, table_name or "members")
 
     def _create_tables(self):
         """
-        Create minimal tables for the user database.
+        Create the members table in the database if it doesn't exist.
+
+        The table includes member number, title, first/last names,
+        Membermojo ID, and a short profile URL.
         """
         sql_statements = [
             f"""CREATE TABLE IF NOT EXISTS "{self.table_name}" (
@@ -53,8 +76,18 @@ class Member(MojoSkel):
 
     def get_number_first_last(self, first_name, last_name, found_error=False):
         """
-        Returns member number for a first last name case-insensitive match.
-        Returns None if no match is found, or raises error if FoundError=True
+        Find a member number based on first and last name (case-insensitive).
+
+        Args:
+            first_name (str): First name of the member.
+            last_name (str): Last name of the member.
+            found_error (bool, optional): If True, raises ValueError if not found.
+
+        Returns:
+            int or None: The member number if found, otherwise None.
+
+        Raises:
+            ValueError: If not found and `found_error` is True.
         """
         sql = f"""
             SELECT member_number
@@ -73,8 +106,13 @@ class Member(MojoSkel):
 
     def get_name(self, member_number):
         """
-        Returns (first_name, last_name) tuple for a given member number.
-        Returns None if no match is found.
+        Get full name for a given member number.
+
+        Args:
+            member_number (int): Member number to look up.
+
+        Returns:
+            str or None: Full name as "First Last", or None if not found.
         """
         sql = f"""
             SELECT first_name, last_name
@@ -91,7 +129,17 @@ class Member(MojoSkel):
 
     def get_number(self, full_name, found_error=False):
         """
-        Find the member number for given full_name
+        Find a member number by full name (splits into first and last).
+
+        Args:
+            full_name (str): Full name of the member.
+            found_error (bool, optional): Raise ValueError if not found.
+
+        Returns:
+            int or None: Member number if found, else None.
+
+        Raises:
+            ValueError: If not found and `found_error` is True.
         """
         parts = full_name.split()
         first_name = parts[0]
@@ -100,7 +148,10 @@ class Member(MojoSkel):
 
     def _add(self, member: MemberData):
         """
-        Add member into sqlite database with passed values if not already in database.
+        Insert a member into the database if not already present.
+
+        Args:
+            member (MemberData): The member to add.
         """
         sql = f"""INSERT OR ABORT INTO "{self.table_name}"
             (member_number, title, first_name, last_name, membermojo_id, short_url)
@@ -127,8 +178,13 @@ class Member(MojoSkel):
 
     def import_csv(self, csv_path):
         """
-        Import CSV into SQL database and create tables if needed.
-        Only adds non-existing members.
+        Load members from a Membermojo CSV file and insert into the database.
+
+        Args:
+            csv_path (Path): Path to the CSV file.
+
+        Notes:
+            Only adds members not already in the database (INSERT OR ABORT).
         """
         print(f"Using SQLite database version {sqlite3.sqlite_version}")
         self._create_tables()
@@ -149,3 +205,4 @@ class Member(MojoSkel):
                     self._add(member)
         except FileNotFoundError:
             print(f"CSV file not found: {csv_path}")
+            

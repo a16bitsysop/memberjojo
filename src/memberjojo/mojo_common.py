@@ -1,6 +1,8 @@
 """
-Common class to base other modules from
-includes some helper functions
+MojoSkel base class
+
+This module provides a common base class (`MojoSkel`) for other `memberjojo` modules.
+It includes helper methods for working with SQLite databases.
 """
 
 import sqlite3
@@ -8,12 +10,22 @@ import sqlite3
 
 class MojoSkel:
     """
-    Base class for the other memberjojo modules
+    Base class for the other memberjojo modules.
+
+    Establishes a connection to a SQLite database and provides helper methods
+    for querying tables.
     """
 
     def __init__(self, db_path, table_name):
         """
-        connect to database and set factory for name based access to columns
+        Initialize the MojoSkel class.
+
+        Connects to the SQLite database and sets the row factory for
+        dictionary-style access to columns.
+
+        Args:
+            db_path (str): Path to the SQLite database file.
+            table_name (str): Name of the table to operate on.
         """
         self.conn = sqlite3.connect(db_path)
 
@@ -23,7 +35,10 @@ class MojoSkel:
 
     def show_table(self, limit=2):
         """
-        Print first `limit` entries as dicts.
+        Print the first few rows of the table as dictionaries.
+
+        Args:
+            limit (int, optional): Number of rows to display. Defaults to 2.
         """
         self.cursor.execute(f'SELECT * FROM "{self.table_name}" LIMIT ?', (limit,))
         rows = self.cursor.fetchall()
@@ -37,8 +52,12 @@ class MojoSkel:
 
     def count(self):
         """
-        Return number of rows.
+        Count the number of rows in the table.
+
+        Returns:
+            int: Total number of rows.
         """
         self.cursor.execute(f'SELECT COUNT(*) FROM "{self.table_name}"')
         result = self.cursor.fetchone()
         return result[0] if result else 0
+    
