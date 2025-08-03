@@ -52,6 +52,24 @@ class Member(MojoSkel):
         """
         super().__init__(member_db_path, table_name or "members")
 
+    def __iter__(self):
+        """
+        Allow iterating over the class, by outputing all members.
+        """
+        sql = (
+            f"SELECT member_number, "
+            f"title, "
+            f"first_name, "
+            f"last_name, "
+            f"membermojo_id, "
+            f"short_url "
+            f'FROM "{self.table_name}"'
+        )
+        self.cursor.execute(sql)
+        rows = self.cursor.fetchall()
+        for row in rows:
+            yield MemberData(*row)
+
     def _create_tables(self):
         """
         Create the members table in the database if it doesn't exist.
