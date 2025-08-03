@@ -13,6 +13,14 @@ dynamic = ["version", "description"]
 [project.urls]
 Home = "https://github.com/a16bitsysop/memberjojo"
 
+[project.optional-dependencies]
+docs = [
+    "sphinx>=7.0",
+    "myst-parser>=2.0",           # For Markdown support
+    "furo",                       # HTML theme
+    "sphinx-autodoc-typehints",   # For cleaner type hints in docs
+]
+
 [tool.pytest.ini_options]
 pythonpath = [ "src" ]
 

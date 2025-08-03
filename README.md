@@ -1,7 +1,5 @@
 # memberjojo
 
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-
 `memberjojo` is a Python library for managing [Membermojo](http://membermojo.co.uk/)
 data from CSV imports.\
 It provides member database interactions, and transaction querying.\
@@ -17,7 +15,7 @@ but currently only a limited amount of member data is imported.
 
 ## Installation
 
-Install via pip
+Install via `pip`:
 
 ```bash
 pip install memberjojo
@@ -89,7 +87,7 @@ Please follow the existing code style and write tests for new features.
 
 ## License
 
-This project is licensed under the MIT [MIT License](LICENSE).
+This project is licensed under the MIT [MIT License](https://github.com/a16bitsysop/memberjojo/blob/main/LICENSE).
 
 ---
 
@@ -97,3 +95,5 @@ This project is licensed under the MIT [MIT License](LICENSE).
 
 Created and maintained by Duncan Bellamy.
 Feel free to open issues or reach out on GitHub.
+
+---

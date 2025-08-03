@@ -1,10 +1,16 @@
-memberjojo
-==========
+.. include:: ../../README.md
+   :parser: myst
+
+API Reference
+-------------
 
 .. toctree::
-   :maxdepth: 4
-   :caption: Contents:
+   :maxdepth: 2
 
-   memberjojo
    memberjojo.mojo_member
    memberjojo.mojo_transaction
+
+Index
+-----
+
+* :ref:`genindex`

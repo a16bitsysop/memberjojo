@@ -19,20 +19,26 @@ release = "0.1"
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
+    "myst_parser", # for using README.md in index.html
     "sphinx.ext.autodoc",
+    "sphinx_autodoc_typehints",
     "sphinx.ext.napoleon",  # for Google/Numpy-style docstrings
 ]
 
 templates_path = ["_templates"]
 exclude_patterns = []
 
+# Do not add filename to docs for modules
+add_module_names = False
+autodoc_inherit_docstrings = True
+
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "alabaster"
-# html_static_path = ["_static"]
-
-# Do not add filename to docs for modules
-add_module_names = False
-autodoc_inherit_docstrings = True
+html_theme = "furo"
+#html_static_path = ["_static"]
