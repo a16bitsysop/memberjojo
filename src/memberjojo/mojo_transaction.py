@@ -1,7 +1,7 @@
 """
 Module to import and interact with Membermojo completed_payments.csv data in SQLite.
 
-Provides automatic column type inference, robust CSV importing, and 
+Provides automatic column type inference, robust CSV importing, and
 helper methods for querying the database.
 """
 
@@ -141,7 +141,8 @@ class Transaction(MojoSkel):
         Args:
             csv_path (Path): Path to the CSV file.
             pk_column (str, optional): Primary key column name. Defaults to the first column.
-            sample_size (int, optional): Number of rows to sample for type inference. Defaults to 100.
+            sample_size (int, optional): Number of rows to sample for type inference.
+            Defaults to 100.
 
         Raises:
             ValueError: If the CSV is empty or contains failed insertions.
@@ -247,4 +248,3 @@ class Transaction(MojoSkel):
         query = f'SELECT * FROM "{self.table_name}" WHERE {" AND ".join(conditions)} LIMIT 1'
         self.cursor.execute(query, values)
         return self.cursor.fetchone()
-    

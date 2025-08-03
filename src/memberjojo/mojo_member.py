@@ -205,4 +205,3 @@ class Member(MojoSkel):
                     self._add(member)
         except FileNotFoundError:
             print(f"CSV file not found: {csv_path}")
-            

@@ -60,4 +60,3 @@ class MojoSkel:
         self.cursor.execute(f'SELECT COUNT(*) FROM "{self.table_name}"')
         result = self.cursor.fetchone()
         return result[0] if result else 0
-    
