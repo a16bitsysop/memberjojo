@@ -66,12 +66,12 @@ pytest
 ## Contributing
 
 Contributions are welcome! Please:
-	1.	Fork the repo
-	2.	Create your feature branch (git checkout -b my-feature)
-        3.      Edit to add and test your changes
-	4.	Commit your changes (git commit -m 'Add some feature')
-	5.	Push to your branch (git push origin my-feature)
-	6.	Open a Pull Request
+1. Fork the repo
+2. Create your feature branch `git checkout -b my-feature`
+3. Edit to add and test your changes
+4. Commit your changes `git commit -m 'Add some feature'`
+5. Push to your branch `git push origin my-feature`
+6. Open a Pull Request
 
 Please follow the existing code style and write tests for new features.
 
