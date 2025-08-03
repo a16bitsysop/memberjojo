@@ -6,10 +6,10 @@
 data from CSV imports.\
 It provides member database interactions, and transaction querying.\
 This is done in a local sqlite3 datatbase, and does not alter anything on Membermojo.\
-It provides tools to load, and query membership and transaction data efficiently without
-having to use sqlite3 directly.\
-When importing CSV files existing entries are skipped,
-so you can just import the latest download and the local database is updated with new entries.\
+It provides tools to load, and query membership and transaction data efficiently
+without having to use sqlite3 directly.\
+When importing CSV files existing entries are skipped, so you can just import the
+latest download and the local database is updated with new entries.\
 All the transaction data is imported into the database,
 but currently only a limited amount of member data is imported.
 
