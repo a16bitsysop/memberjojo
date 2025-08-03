@@ -4,31 +4,35 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../../src'))  # so Sphinx can find the module
+
+sys.path.insert(0, os.path.abspath("../../src"))  # so Sphinx can find the module
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'memberjojo'
-copyright = '2025, Duncan Bellamy'
-author = 'Duncan Bellamy'
-release = '0.1'
+project = "memberjojo"
+copyright = "2025, Duncan Bellamy"
+author = "Duncan Bellamy"
+release = "0.1"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-	'sphinx.ext.autodoc',
-	'sphinx.ext.napoleon',  # for Google/Numpy-style docstrings
+    "sphinx.ext.autodoc",
+    "sphinx.ext.napoleon",  # for Google/Numpy-style docstrings
 ]
 
-templates_path = ['_templates']
+templates_path = ["_templates"]
 exclude_patterns = []
-
 
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'alabaster'
-html_static_path = ['_static']
+html_theme = "alabaster"
+#html_static_path = ["_static"]
+
+# Do not add filename to docs for modules
+add_module_names = False
+autodoc_inherit_docstrings = True
