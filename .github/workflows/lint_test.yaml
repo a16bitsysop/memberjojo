@@ -1,9 +1,9 @@
-name: pylint and pytest
+name: lint and pytest
 
 on: [push, pull_request]
 
 jobs:
-  pylint_pytest:
+  lint_pytest:
     runs-on: ubuntu-latest
 
     steps:
