@@ -2,16 +2,21 @@
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-`memberjojo` is a Python library for managing [Membermojo](http://membermojo.co.uk/) data from CSV imports.\
+`memberjojo` is a Python library for managing [Membermojo](http://membermojo.co.uk/)
+data from CSV imports.\
 It provides member database interactions, and transaction querying.\
 This is done in a local sqlite3 datatbase, and does not alter anything on Membermojo.\
-It provides tools to load, and query membership and transaction data efficiently without having to use sqlite3 directly.
-When importing CSV files existing entries are skipped, so you can just import the latest download and the local database is updated with new entries.\
-All the transaction data is imported into the database, but currently only a limited amount of member data is imported.
+It provides tools to load, and query membership and transaction data efficiently without
+having to use sqlite3 directly.\
+When importing CSV files existing entries are skipped,
+so you can just import the latest download and the local database is updated with new entries.\
+All the transaction data is imported into the database,
+but currently only a limited amount of member data is imported.
 
 ---
 
 ## Installation
+
 Install via pip
 
 ```bash
@@ -29,6 +34,7 @@ flit install --symlink
 ## Usage
 
 Example loading members and using Member objects:
+
 ```python
 from pathlib import Path
 from membermojo import Member
@@ -61,6 +67,7 @@ Full documentation is available at
 ## Running Tests
 
 Run tests:
+
 ```bash
 pytest
 ```
@@ -68,6 +75,7 @@ pytest
 ## Contributing
 
 Contributions are welcome! Please:
+
 1. Fork the repo
 2. Create your feature branch `git checkout -b my-feature`
 3. Edit the source code to add and test your changes
