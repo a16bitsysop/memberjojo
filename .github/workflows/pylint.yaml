@@ -22,7 +22,7 @@ jobs:
 
       - name: Run pylint
         run: |
-          PYTHONPATH="$PYTHONPATH:src" pylint $(git ls-files '*.py')
+          PYTHONPATH="$PYTHONPATH:src" pylint .
 
       - name: Run pytest
         run: |

@@ -16,3 +16,5 @@ Home = "https://github.com/a16bitsysop/memberjojo"
 [tool.pytest.ini_options]
 pythonpath = [ "src" ]
 
+[tool.pylint.'MAIN']
+ignore = ["docs"]
