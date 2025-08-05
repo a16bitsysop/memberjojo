@@ -1,12 +1,13 @@
 """
 Module to import and interact with Membermojo completed_payments.csv data in SQLite.
 
-Provides automatic column type inference, robust CSV importing, and 
+Provides automatic column type inference, robust CSV importing, and
 helper methods for querying the database.
 """
 
 from collections import Counter, defaultdict
 from csv import DictReader
+from pathlib import Path
 from sqlite3 import IntegrityError, OperationalError, DatabaseError
 
 from .config import CSV_ENCODING  # import encoding from config.py
@@ -18,29 +19,26 @@ class Transaction(MojoSkel):
     Handles importing and querying completed payment data.
 
     Extends:
-        MojoSkel: Base class with common database operations.
+        MojoSkel: Base class with transaction database operations.
+
+    :param payment_db_path: Path to the SQLite database.
+    :param table_name: (optional) Name of the table. Defaults to "payments".
     """
 
-    def __init__(self, payment_db_path, table_name="payments"):
+    def __init__(self, payment_db_path: str, table_name: str = "payments"):
         """
         Initialize the Transaction object.
-
-        Args:
-            payment_db_path (str): Path to the SQLite database.
-            table_name (str, optional): Name of the table. Defaults to "payments".
         """
         super().__init__(payment_db_path, table_name)
         self.columns = {}
 
-    def _guess_type(self, value):
+    def _guess_type(self, value: any) -> str:
         """
         Guess the SQLite data type of a CSV field value.
 
-        Args:
-            value (Any): The value from a CSV field.
+        :param value: The value from a CSV field.
 
-        Returns:
-            str: One of 'INTEGER', 'REAL', or 'TEXT'.
+        :return: One of 'INTEGER', 'REAL', or 'TEXT'.
         """
         if value is None:
             return "TEXT"
@@ -60,12 +58,11 @@ class Transaction(MojoSkel):
             except (ValueError, TypeError):
                 return "TEXT"
 
-    def _infer_columns_from_rows(self, rows):
+    def _infer_columns_from_rows(self, rows: list[dict]):
         """
         Infer SQLite column types based on sample CSV data.
 
-        Args:
-            rows (list[dict]): Sample rows from CSV to analyze.
+        :param rows: Sample rows from CSV to analyze.
         """
         type_counters = defaultdict(Counter)
 
@@ -86,13 +83,12 @@ class Transaction(MojoSkel):
 
         print("Inferred columns:", self.columns)
 
-    def _create_tables(self, table, primary_col):
+    def _create_tables(self, table: str, primary_col: str):
         """
         Create the table if it doesn't exist, using inferred schema.
 
-        Args:
-            table (str): Table name.
-            primary_col (str or None): Column to use as primary key.
+        :param table: Table name.
+        :param primary_col: Column to use as primary key, or None for default.
         """
         col_names = list(self.columns.keys())
         if primary_col is None:
@@ -112,12 +108,10 @@ class Transaction(MojoSkel):
         """
         Convert CSV row string values to types suitable for SQLite.
 
-        Args:
-            row (dict): A dictionary from the CSV row.
-            column_types (dict): Mapping of column names to SQLite types.
+        :param row: A dictionary from the CSV row.
+        :param column_types: Mapping of column names to SQLite types.
 
-        Returns:
-            tuple: Parsed values.
+        :return: Parsed values.
         """
         values = []
         for col, col_type in column_types.items():
@@ -132,19 +126,17 @@ class Transaction(MojoSkel):
                 values.append(val)
         return tuple(values)
 
-    def import_csv(self, csv_path, pk_column=None, sample_size=100):
+    def import_csv(self, csv_path: Path, pk_column: str = None, sample_size: int = 100):
         """
         Import a completed_payments.csv file into SQLite.
 
         Infers column types and logs failed rows. Creates the table if needed.
 
-        Args:
-            csv_path (Path): Path to the CSV file.
-            pk_column (str, optional): Primary key column name. Defaults to the first column.
-            sample_size (int, optional): Number of rows to sample for type inference. Defaults to 100.
+        :param csv_path: Path to the CSV file.
+        :param pk_column: (optional) Primary key column name. Defaults to the first column.
+        :param sample_size: (optional) Number of rows to sample for type inference. Defaults to 100.
 
-        Raises:
-            ValueError: If the CSV is empty or contains failed insertions.
+        :raises ValueError: If the CSV is empty or contains failed insertions.
         """
         try:
             # First pass: infer schema from sample
@@ -205,16 +197,14 @@ class Transaction(MojoSkel):
                 print(f"... and {len(failed_rows) - 5} more")
             raise ValueError(f"Failed to import: {csv_path}")
 
-    def get_row(self, entry_name, entry_value):
+    def get_row(self, entry_name: str, entry_value: str) -> dict:
         """
         Retrieve a single row matching column = value (case-insensitive).
 
-        Args:
-            entry_name (str): Column name to filter by.
-            entry_value (str): Value to match.
+        :param entry_name: Column name to filter by.
+        :param entry_value: Value to match.
 
-        Returns:
-            dict or None: The matching row as a dictionary, or None if not found.
+        :return: The matching row as a dictionary, or None if not found.
         """
         if not entry_value:
             return None
@@ -225,15 +215,13 @@ class Transaction(MojoSkel):
         row = self.cursor.fetchone()
         return dict(row) if row else None
 
-    def get_row_multi(self, match_dict):
+    def get_row_multi(self, match_dict: dict) -> dict:
         """
         Retrieve the first row matching multiple column = value pairs.
 
-        Args:
-            match_dict (dict): Dictionary of column names and values to match.
+        :param match_dict: Dictionary of column names and values to match.
 
-        Returns:
-            sqlite3.Row or None: The first matching row, or None if not found.
+        :return: The first matching row, or None if not found.
         """
         conditions = []
         values = []
@@ -247,4 +235,3 @@ class Transaction(MojoSkel):
         query = f'SELECT * FROM "{self.table_name}" WHERE {" AND ".join(conditions)} LIMIT 1'
         self.cursor.execute(query, values)
         return self.cursor.fetchone()
-    
