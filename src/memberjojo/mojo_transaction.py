@@ -26,7 +26,7 @@ class Transaction(MojoSkel):
         table_name: (optional) Name of the table. Defaults to "payments".
     """
 
-    def __init__(self, payment_db_path: str, table_name: str="payments"):
+    def __init__(self, payment_db_path: str, table_name: str = "payments"):
         """
         Initialize the Transaction object.
         """
@@ -133,7 +133,7 @@ class Transaction(MojoSkel):
                 values.append(val)
         return tuple(values)
 
-    def import_csv(self, csv_path: Path, pk_column: str=None, sample_size: int=100):
+    def import_csv(self, csv_path: Path, pk_column: str = None, sample_size: int = 100):
         """
         Import a completed_payments.csv file into SQLite.
 
@@ -249,4 +249,3 @@ class Transaction(MojoSkel):
         query = f'SELECT * FROM "{self.table_name}" WHERE {" AND ".join(conditions)} LIMIT 1'
         self.cursor.execute(query, values)
         return self.cursor.fetchone()
-    
