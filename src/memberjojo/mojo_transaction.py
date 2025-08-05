@@ -21,9 +21,8 @@ class Transaction(MojoSkel):
     Extends:
         MojoSkel: Base class with transaction database operations.
 
-    Args:
-        payment_db_path: Path to the SQLite database.
-        table_name: (optional) Name of the table. Defaults to "payments".
+    :param payment_db_path: Path to the SQLite database.
+    :param table_name: (optional) Name of the table. Defaults to "payments".
     """
 
     def __init__(self, payment_db_path: str, table_name: str = "payments"):
@@ -37,11 +36,9 @@ class Transaction(MojoSkel):
         """
         Guess the SQLite data type of a CSV field value.
 
-        Args:
-            value: The value from a CSV field.
+        :param value: The value from a CSV field.
 
-        Returns:
-            One of 'INTEGER', 'REAL', or 'TEXT'.
+        :return: One of 'INTEGER', 'REAL', or 'TEXT'.
         """
         if value is None:
             return "TEXT"
@@ -61,12 +58,11 @@ class Transaction(MojoSkel):
             except (ValueError, TypeError):
                 return "TEXT"
 
-    def _infer_columns_from_rows(self, rows):
+    def _infer_columns_from_rows(self, rows: list[dict]):
         """
         Infer SQLite column types based on sample CSV data.
 
-        Args:
-            rows (list[dict]): Sample rows from CSV to analyze.
+        :param rows: Sample rows from CSV to analyze.
         """
         type_counters = defaultdict(Counter)
 
@@ -91,9 +87,8 @@ class Transaction(MojoSkel):
         """
         Create the table if it doesn't exist, using inferred schema.
 
-        Args:
-            table: Table name.
-            primary_col: Column to use as primary key, or None for default.
+        :param table: Table name.
+        :param primary_col: Column to use as primary key, or None for default.
         """
         col_names = list(self.columns.keys())
         if primary_col is None:
@@ -113,12 +108,10 @@ class Transaction(MojoSkel):
         """
         Convert CSV row string values to types suitable for SQLite.
 
-        Args:
-            row: A dictionary from the CSV row.
-            column_types: Mapping of column names to SQLite types.
+        :param row: A dictionary from the CSV row.
+        :param column_types: Mapping of column names to SQLite types.
 
-        Returns:
-            Parsed values.
+        :return: Parsed values.
         """
         values = []
         for col, col_type in column_types.items():
@@ -139,14 +132,11 @@ class Transaction(MojoSkel):
 
         Infers column types and logs failed rows. Creates the table if needed.
 
-        Args:
-            csv_path: Path to the CSV file.
-            pk_column: (optional) Primary key column name. Defaults to the first column.
-            sample_size: (optional) Number of rows to sample for type inference.
-            Defaults to 100.
+        :param csv_path: Path to the CSV file.
+        :param pk_column: (optional) Primary key column name. Defaults to the first column.
+        :param sample_size: (optional) Number of rows to sample for type inference. Defaults to 100.
 
-        Raises:
-            ValueError: If the CSV is empty or contains failed insertions.
+        :raises ValueError: If the CSV is empty or contains failed insertions.
         """
         try:
             # First pass: infer schema from sample
@@ -211,12 +201,10 @@ class Transaction(MojoSkel):
         """
         Retrieve a single row matching column = value (case-insensitive).
 
-        Args:
-            entry_name: Column name to filter by.
-            entry_value: Value to match.
+        :param entry_name: Column name to filter by.
+        :param entry_value: Value to match.
 
-        Returns:
-            The matching row as a dictionary, or None if not found.
+        :return: The matching row as a dictionary, or None if not found.
         """
         if not entry_value:
             return None
@@ -231,11 +219,9 @@ class Transaction(MojoSkel):
         """
         Retrieve the first row matching multiple column = value pairs.
 
-        Args:
-            match_dict: Dictionary of column names and values to match.
+        :param match_dict: Dictionary of column names and values to match.
 
-        Returns:
-            The first matching row, or None if not found.
+        :return: The first matching row, or None if not found.
         """
         conditions = []
         values = []

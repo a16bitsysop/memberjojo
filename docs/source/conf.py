@@ -22,7 +22,6 @@ extensions = [
     "myst_parser",  # for using README.md in index.html
     "sphinx.ext.autodoc",
     "sphinx_autodoc_typehints",
-    "sphinx.ext.napoleon",  # for Google/Numpy-style docstrings
 ]
 
 templates_path = ["_templates"]
