@@ -3,9 +3,9 @@
 `memberjojo` is a Python library for managing [Membermojo](http://membermojo.co.uk/)
 data from CSV imports.\
 It provides member database interactions, and transaction querying.\
-This is done in a local sqlite3 datatbase, and does not alter anything on Membermojo.\
+This is done in a local SQLite database, and does not alter anything on Membermojo.\
 It provides tools to load, and query membership and transaction data efficiently
-without having to use sqlite3 directly.\
+without having to use SQLite directly.\
 When importing CSV files existing entries are skipped, so you can just import the
 latest download and the local database is updated with new entries.\
 All the transaction data is imported into the database,
