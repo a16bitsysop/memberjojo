@@ -14,16 +14,19 @@ dynamic = ["version", "description"]
 Home = "https://github.com/a16bitsysop/memberjojo"
 
 [project.optional-dependencies]
-dev = [ "pytest" ]
+dev = [
+    "pytest",
+    "setuptools-scm",
+]
 lint = [
     "black",
     "coverage",
     "pylint",
 ]
 docs = [
-    "sphinx>=7.0",
-    "myst-parser>=2.0",           # For Markdown support
     "furo",                       # HTML theme
+    "myst-parser>=2.0",           # For Markdown support
+    "sphinx>=7.0",
     "sphinx-autodoc-typehints",   # For cleaner type hints in docs
 ]
 
@@ -32,3 +35,6 @@ pythonpath = [ "src" ]
 
 [tool.pylint.'MAIN']
 ignore = ["docs"]
+
+[tool.setuptools_scm]
+version_file = "src/memberjojo/_version.py"

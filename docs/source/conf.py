@@ -4,6 +4,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 import os
 import sys
+import memberjojo
 
 sys.path.insert(0, os.path.abspath("../../src"))  # so Sphinx can find the module
 
@@ -13,7 +14,7 @@ sys.path.insert(0, os.path.abspath("../../src"))  # so Sphinx can find the modul
 project = "memberjojo"
 copyright = "2025, Duncan Bellamy"
 author = "Duncan Bellamy"
-release = "0.1"
+release = memberjojo.__version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
