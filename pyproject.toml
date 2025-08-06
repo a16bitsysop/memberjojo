@@ -35,6 +35,7 @@ pythonpath = [ "src" ]
 
 [tool.pylint.'MAIN']
 ignore = ["docs"]
+ignore-patterns = ["_version.py"]
 
 [tool.setuptools_scm]
 version_file = "src/memberjojo/_version.py"
