@@ -67,8 +67,11 @@ jobs:
         run: |
           pip install ".[dev,docs]"
 
-      - name: Generate version file
-        run: python -m setuptools_scm
+      - name: Build package to get version file
+        run: flit build
+
+      - name: Install package
+        run: pip install .
 
       - name: Build Sphinx documentation
         run: sphinx-build -b html docs/source docs/_build/html
