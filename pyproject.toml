@@ -15,6 +15,7 @@ Home = "https://github.com/a16bitsysop/memberjojo"
 
 [project.optional-dependencies]
 dev = [
+    "flit",
     "pytest",
     "setuptools-scm",
 ]
