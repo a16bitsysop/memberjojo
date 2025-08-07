@@ -33,7 +33,9 @@ docs = [
 [tool.pytest.ini_options]
 pythonpath = [ "src" ]
 
-[tool.pylint.'MAIN']
+[tool.pylint.main]
+output-format = "colorized"
+verbose = true
 ignore = ["docs"]
 ignore-patterns = ["_version.py"]
 
