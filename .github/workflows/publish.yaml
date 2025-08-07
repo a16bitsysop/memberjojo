@@ -67,6 +67,9 @@ jobs:
         run: |
           pip install ".[dev,docs]"
 
+      - name: Generate version file
+        run: python -m setuptools_scm
+
       - name: Build Sphinx documentation
         run: sphinx-build -b html docs/source docs/_build/html
 
@@ -76,3 +79,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: docs/_build/html
           publish_branch: gh-pages
+          
