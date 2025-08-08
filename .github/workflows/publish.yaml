@@ -21,6 +21,17 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Set up .pypirc for TestPyPI
+        run: |
+          echo "[distutils]" > ~/.pypirc
+          echo "index-servers =" >> ~/.pypirc
+          echo "    pypi" >> ~/.pypirc
+          echo "    testpypi" >> ~/.pypirc
+          echo "" >> ~/.pypirc
+          echo "[testpypi]" >> ~/.pypirc
+          echo "repository: https://test.pypi.org/legacy/" >> ~/.pypirc
+        shell: bash for TestPyPI
+
       - name: Install build deps
         run: pip install build ".[dev]"
 
