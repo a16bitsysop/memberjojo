@@ -21,19 +21,8 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Set up .pypirc for TestPyPI
-        run: |
-          echo "[distutils]" > ~/.pypirc
-          echo "index-servers =" >> ~/.pypirc
-          echo "    pypi" >> ~/.pypirc
-          echo "    testpypi" >> ~/.pypirc
-          echo "" >> ~/.pypirc
-          echo "[testpypi]" >> ~/.pypirc
-          echo "repository: https://test.pypi.org/legacy/" >> ~/.pypirc
-        shell: bash
-
       - name: Install build deps
-        run: pip install build ".[dev]"
+        run: pip install build twine ".[dev]"
 
       - name: Build the wheel
         run: python3 -m build
@@ -62,8 +51,9 @@ jobs:
         run: |
           if [ "${{ steps.determine-target.outputs.target }}" = "testpypi" ]; then
             flit publish --repository testpypi
+            twine upload -u __token__ -p $TEST_PYPI_TOKEN --repository-url https://test.pypi.org/legacy/ dist/*
           else
-            flit publish
+            twine upload -u __token__ -p $PYPI_TOKEN dist/*
           fi
 
   docs:
