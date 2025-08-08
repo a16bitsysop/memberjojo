@@ -1,6 +1,6 @@
 [build-system]
-requires = ["flit_scm"]
-build-backend = "flit_scm:.buildapi"
+requires = ["flit_core", "flit_scm",]
+build-backend = "flit_core.buildapi"
 
 [project]
 name = "memberjojo"
@@ -34,7 +34,6 @@ exclude = [".gitignore"]
 
 [tool.setuptools_scm]
 write_to = "src/memberjojo/_version.py"
-tag_regex = '^v(?P<version>\\d+\\.\\d+(\\.\\d+)?((a|b|rc)\\d+)?(-[a-z0-9]+)?)$'
 
 [tool.pytest.ini_options]
 pythonpath = [ "src" ]
