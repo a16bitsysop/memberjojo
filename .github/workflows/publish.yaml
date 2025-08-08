@@ -30,7 +30,7 @@ jobs:
           echo "" >> ~/.pypirc
           echo "[testpypi]" >> ~/.pypirc
           echo "repository: https://test.pypi.org/legacy/" >> ~/.pypirc
-        shell: bash for TestPyPI
+        shell: bash
 
       - name: Install build deps
         run: pip install build ".[dev]"
