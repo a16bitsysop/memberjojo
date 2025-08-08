@@ -21,8 +21,8 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install python build
-        run: pip install build
+      - name: Install build deps
+        run: pip install build ".[dev]"
 
       - name: Build the wheel
         run: python3 -m build
