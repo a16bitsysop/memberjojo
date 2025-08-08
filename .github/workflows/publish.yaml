@@ -50,7 +50,6 @@ jobs:
           FLIT_PASSWORD: ${{ steps.determine-target.outputs.target == 'testpypi' && secrets.TEST_PYPI_TOKEN || secrets.PYPI_TOKEN }}
         run: |
           if [ "${{ steps.determine-target.outputs.target }}" = "testpypi" ]; then
-            flit publish --repository testpypi
             twine upload -u __token__ -p $TEST_PYPI_TOKEN --repository-url https://test.pypi.org/legacy/ dist/*
           else
             twine upload -u __token__ -p $PYPI_TOKEN dist/*
