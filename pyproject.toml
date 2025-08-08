@@ -1,6 +1,6 @@
 [build-system]
 requires = ["flit_core", "flit_scm",]
-build-backend = "flit_core.buildapi"
+build-backend = "flit_scm:buildapi"
 
 [project]
 name = "memberjojo"
