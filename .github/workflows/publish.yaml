@@ -28,10 +28,10 @@ jobs:
         run: python3 -m build
 
       - name: Save _version.py
-              uses: actions/upload-artifact@v4
-              with:
-                name: version.py
-                path: src/memberjojo/_version.py
+        uses: actions/upload-artifact@v4
+        with:
+          name: version.py
+          path: src/memberjojo/_version.py
 
       - name: Determine publish target
         id: determine-target
