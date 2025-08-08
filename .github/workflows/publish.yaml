@@ -21,8 +21,17 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install Flit
-        run: pip install ".[dev]"
+      - name: Install python build
+        run: pip install build
+
+      - name: Build the wheel
+        run: python3 -m build
+
+      - name: Save _version.py
+              uses: actions/upload-artifact@v4
+              with:
+                name: version.py
+                path: src/memberjojo/_version.py
 
       - name: Determine publish target
         id: determine-target
@@ -67,13 +76,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install ".[dev,docs]"
+          pip install ".[docs]"
 
-      - name: Build package to get version file
-        run: flit build
-
-      - name: Install package
-        run: pip install .
+      - name: Load _version.py
+        uses: actions/download-artifact@v4
+        with:
+          name: version.py
 
       - name: Build Sphinx documentation
         run: sphinx-build -b html docs/source docs/_build/html

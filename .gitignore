@@ -2,4 +2,4 @@ __pycache__
 dist
 docs/build/
 docs/_build/
-
+src/memberjojo/_version.py
