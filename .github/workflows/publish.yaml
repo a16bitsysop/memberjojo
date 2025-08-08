@@ -61,7 +61,7 @@ jobs:
           FLIT_PASSWORD: ${{ steps.determine-target.outputs.target == 'testpypi' && secrets.TEST_PYPI_TOKEN || secrets.PYPI_TOKEN }}
         run: |
           if [ "${{ steps.determine-target.outputs.target }}" = "testpypi" ]; then
-            flit publish --repository-url https://test.pypi.org/legacy/
+            flit publish --repository testpypi
           else
             flit publish
           fi
