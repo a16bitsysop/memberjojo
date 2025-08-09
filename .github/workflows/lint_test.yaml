@@ -30,6 +30,6 @@ jobs:
             coverage report -m
 
       - name: Run markdownlint
-        uses: DavidAnson/markdownlint-cli2-action@v16
+        uses: DavidAnson/markdownlint-cli2-action@v20
         with:
           globs: '**/*.md'
