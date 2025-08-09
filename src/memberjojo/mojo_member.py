@@ -122,27 +122,6 @@ class Member(MojoSkel):
 
         return result[0] if result else None
 
-    def get_name(self, member_number: int) -> Optional[str]:
-        """
-        Get full name for a given member number.
-
-        :param member_number: Member number to look up.
-
-        :return: Full name as "First Last", or None if not found.
-        """
-        sql = f"""
-            SELECT first_name, last_name
-            FROM "{self.table_name}"
-            WHERE member_number = ?
-            """
-        self.cursor.execute(sql, (member_number,))
-        result = self.cursor.fetchone()
-
-        if result:
-            first_name, last_name = result
-            return f"{first_name} {last_name}"
-        return None
-
     def get_number(self, full_name: str, found_error: bool = False) -> Optional[int]:
         """
         Find a member number by full name (tries first and last, and then middle last if 3 words).
@@ -177,6 +156,27 @@ class Member(MojoSkel):
                 f"❌ Cannot find {full_name} in member database. Tried: {tried}"
             )
         return member_num
+
+    def get_name(self, member_number: int) -> Optional[str]:
+        """
+        Get full name for a given member number.
+
+        :param member_number: Member number to look up.
+
+        :return: Full name as "First Last", or None if not found.
+        """
+        sql = f"""
+            SELECT first_name, last_name
+            FROM "{self.table_name}"
+            WHERE member_number = ?
+            """
+        self.cursor.execute(sql, (member_number,))
+        result = self.cursor.fetchone()
+
+        if result:
+            first_name, last_name = result
+            return f"{first_name} {last_name}"
+        return None
 
     def _add(self, member: MemberData):
         """
