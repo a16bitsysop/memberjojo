@@ -179,3 +179,7 @@ def test_get_number_first_last_more_names(member_db):
     """
     assert member_db.get_number("Dr Jane Smith") == 2
     assert member_db.get_number("John Jojo Doe") == 1
+    with pytest.raises(ValueError) as exc_info:
+        member_db.get_number("Emily Sara", found_error=True)
+
+    assert "Cannot find" in str(exc_info.value)
