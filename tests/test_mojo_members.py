@@ -171,3 +171,10 @@ def test_get_number_first_last_not_found_raises(member_db):
         ValueError, match=r"❌ Cannot find: John Snow in member database."
     ):
         member_db.get_number_first_last("John", "Snow", found_error=True)
+
+def test_get_number_first_last_more_names(member_db):
+     """
+     Test logic for 3 names passed
+     """
+     assert member_db.get_number("Dr Jane Smith") == 2
+     assert member_db.get_number("John Jojo Doe") == 1
