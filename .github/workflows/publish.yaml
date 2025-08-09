@@ -32,6 +32,11 @@ jobs:
       with:
         name: python-package-distributions
         path: dist/
+    - name: Store _version.py
+      uses: actions/upload-artifact@v4
+      with:
+        name: version.py
+        path: src/memberjojo/_version.py
 
   publish-to-pypi:
     name: >-
