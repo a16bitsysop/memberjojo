@@ -1,59 +1,83 @@
-name: Publish to PyPI or TestPyPI
+name: Publish to PyPI and gh pages
 
 on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
 
 jobs:
-  publish:
-    if: startsWith(github.ref, 'refs/tags/v')
+  build:
+    name: Build distribution 📦
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
+    - name: Install pypa/build
+      run: >-
+        python3 -m
+        pip install
+        build
+        --user
+    - name: Build a binary wheel and a source tarball
+      run: python3 -m build
+    - name: Store the distribution packages
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-package-distributions
+        path: dist/
 
-      - name: Install build deps
-        run: pip install build twine ".[dev]"
+  publish-to-pypi:
+    name: >-
+      Publish Python 🐍 distribution 📦 to PyPI
+    if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref, 'rc') # publish release tags to PyPI
+    needs:
+    - build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/m/memberjojo
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+    steps:
+    - name: Download all the dists
+      uses: actions/download-artifact@v4
+      with:
+        name: python-package-distributions
+        path: dist/
+    - name: Publish distribution 📦 to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
 
-      - name: Build the wheel
-        run: python3 -m build
+  publish-to-testpypi:
+    name: Publish Python 🐍 distribution 📦 to TestPyPI
+    if: startsWith(github.ref, 'refs/tags/') && contains(github.ref, 'rc') # publish rc tags to PyPI
+    needs:
+    - build
+    runs-on: ubuntu-latest
 
-      - name: Save _version.py
-        uses: actions/upload-artifact@v4
-        with:
-          name: version.py
-          path: src/memberjojo/_version.py
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/m/memberjojo
 
-      - name: Determine publish target
-        id: determine-target
-        run: |
-          TAG="${GITHUB_REF##*/}"
-          echo "Tag is $TAG"
-          if [[ "$TAG" == *rc* ]] || [[ "$TAG" == *a* ]] || [[ "$TAG" == *b* ]] || [[ "$TAG" == *dev* ]]; then
-            echo "target=testpypi" >> "$GITHUB_OUTPUT"
-          else
-            echo "target=pypi" >> "$GITHUB_OUTPUT"
-          fi
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
 
-      - name: Publish with Flit
-        env:
-          FLIT_USERNAME: __token__
-          FLIT_PASSWORD: ${{ steps.determine-target.outputs.target == 'testpypi' && secrets.TEST_PYPI_TOKEN || secrets.PYPI_TOKEN }}
-        run: |
-          if [ "${{ steps.determine-target.outputs.target }}" = "testpypi" ]; then
-            twine upload -u __token__ -p $TEST_PYPI_TOKEN --repository-url https://test.pypi.org/legacy/ dist/*
-          else
-            twine upload -u __token__ -p $PYPI_TOKEN dist/*
-          fi
+    steps:
+    - name: Download all the dists
+      uses: actions/download-artifact@v4
+      with:
+        name: python-package-distributions
+        path: dist/
+    - name: Publish distribution 📦 to TestPyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
 
   docs:
     if: startsWith(github.ref, 'refs/tags/')
