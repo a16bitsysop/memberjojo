@@ -7,24 +7,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout full Git history
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: 🐍 Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Install dependencies
+      - name: 🛠️ Install build deps
         run: pip install ".[dev,lint]"
 
-      - name: Run black
+      - name: 🧹 Run black
         run: black --check --diff --color .
 
-      - name: Run pylint
+      - name: 🧹 Run pylint
         run: pylint .
 
-      - name: Run pytest
+      - name: 🧪 Run pytest
         run: |
             coverage run -m pytest
             coverage report -m

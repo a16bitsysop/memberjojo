@@ -7,32 +7,33 @@ on:
 
 jobs:
   build:
-    name: Build distribution 📦
+    name: 📦 Build distribution
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
       with:
         persist-credentials: false
-    - name: Set up Python
+    - name: 🐍 Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.x"
 
-    - name: Install pypa/build
+    - name: 🛠️ Install pypa/build
       run: >-
         python3 -m
         pip install
         build
         --user
-    - name: Build a binary wheel and a source tarball
+    - name: ⚙️ Build a binary wheel and a source tarball
       run: python3 -m build
-    - name: Store the distribution packages
+    - name: 💾 Store the distribution packages
       uses: actions/upload-artifact@v4
       with:
         name: python-package-distributions
         path: dist/
-    - name: Store _version.py
+    - name: 💾 Store _version.py
       uses: actions/upload-artifact@v4
       with:
         name: version.py
@@ -51,12 +52,12 @@ jobs:
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
     steps:
-    - name: Download all the dists
+    - name: 💾 Download all the dists
       uses: actions/download-artifact@v4
       with:
         name: python-package-distributions
         path: dist/
-    - name: Publish distribution 📦 to PyPI
+    - name: 🚀 Publish distribution 📦 to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
 
   publish-to-testpypi:
@@ -74,12 +75,12 @@ jobs:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
 
     steps:
-    - name: Download all the dists
+    - name: 💾 Download all the dists
       uses: actions/download-artifact@v4
       with:
         name: python-package-distributions
         path: dist/
-    - name: Publish distribution 📦 to TestPyPI
+    - name: 🚀 Publish distribution 📦 to TestPyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         repository-url: https://test.pypi.org/legacy/
@@ -93,29 +94,27 @@ jobs:
       contents: write  # needed for GitHub Pages deploy
 
     steps:
-      - name: Checkout code
+      - name: 📥 Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up Python
+      - name: 🐍 Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Install dependencies
+      - name: 🛠️ Install dependencies
         run: |
           pip install ".[docs]"
 
-      - name: Load _version.py
+      - name: 💾 Load _version.py
         uses: actions/download-artifact@v4
         with:
           name: version.py
 
-      - name: Build Sphinx documentation
+      - name: 📚 Build Sphinx documentation
         run: sphinx-build -b html docs/source docs/_build/html
 
-      - name: Deploy to GitHub Pages
+      - name: 🚀 Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
