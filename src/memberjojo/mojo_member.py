@@ -145,7 +145,7 @@ class Member(MojoSkel):
 
     def get_number(self, full_name: str, found_error: bool = False) -> Optional[int]:
         """
-        Find a member number by full name (splits into first and last).
+        Find a member number by full name (tries first and last, and then middle last if 3 words).
 
         :param full_name: Full name of the member.
         :param found_error: (optional) Raise ValueError if not found.
@@ -154,10 +154,29 @@ class Member(MojoSkel):
 
         :raises ValueError: If not found and `found_error` is True.
         """
-        parts = full_name.split()
-        first_name = parts[0]
-        last_name = " ".join(parts[1:])  # Handles middle names too
-        return self.get_number_first_last(first_name, last_name, found_error)
+        member_num = None
+        try_names = []
+        parts = full_name.strip().split()
+        # Try first + last
+        if len(parts) >= 2:
+            first_name = parts[0]
+            last_name = parts[-1]
+            try_names.append(f"<{first_name} {last_name}>")
+            member_num = self.get_number_first_last(first_name, last_name)
+
+        # Try middle + last if 3 parts and first+last failed
+        if not member_num and len(parts) == 3:
+            first_name = parts[1]
+            last_name = parts[2]
+            try_names.append(f"<{first_name} {last_name}>")
+            member_num = self.get_number_first_last(first_name, last_name)
+
+        if not member_num and found_error:
+            tried = ", ".join(try_names) if try_names else "No valid names to find"
+            raise ValueError(
+                f"❌ Cannot find {full_name} in member database. Tried: {tried}"
+            )
+        return member_num
 
     def _add(self, member: MemberData):
         """
