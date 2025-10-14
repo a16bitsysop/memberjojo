@@ -9,6 +9,7 @@ from collections import Counter, defaultdict
 from csv import DictReader
 from pathlib import Path
 from sqlite3 import IntegrityError, OperationalError, DatabaseError
+from decimal import Decimal
 
 from .config import CSV_ENCODING  # import encoding from config.py
 from .mojo_common import MojoSkel
@@ -230,7 +231,11 @@ class Transaction(MojoSkel):
                 conditions.append(f'"{col}" IS NULL')
             else:
                 conditions.append(f'"{col}" = ?')
-                values.append(val)
+                values.append(
+                    float(val.quantize(Decimal("0.01")))
+                    if isinstance(val, Decimal)
+                    else val
+                )
 
         query = f'SELECT * FROM "{self.table_name}" WHERE {" AND ".join(conditions)} LIMIT 1'
         self.cursor.execute(query, values)
