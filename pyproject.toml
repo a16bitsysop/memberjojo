@@ -39,9 +39,7 @@ include = ["tests", "src/memberjojo/_version.py"]
 write_to = "src/memberjojo/_version.py"
 
 [tool.pytest.ini_options]
-pythonpath = [ "src" ]
-testpaths = ["tests"]
-norecursedirs = ["docs"]
+pythonpath = ["src"]
 
 [tool.pylint.main]
 output-format = "colorized"
