@@ -40,6 +40,8 @@ write_to = "src/memberjojo/_version.py"
 
 [tool.pytest.ini_options]
 pythonpath = [ "src" ]
+testpaths = ["tests"]
+norecursedirs = ["docs"]
 
 [tool.pylint.main]
 output-format = "colorized"
