@@ -44,4 +44,4 @@ pythonpath = ["src"]
 [tool.pylint.main]
 output-format = "colorized"
 verbose = true
-ignore-patterns = ["_version.py", "docs/.*"]
+ignore-patterns = ["_version.py", "docs\\..*",]
