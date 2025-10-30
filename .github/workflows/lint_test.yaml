@@ -22,7 +22,7 @@ jobs:
         run: black --check --diff --color .
 
       - name: 🧹 Run pylint
-        run: pylint .
+        run: pylint --ignore=docs .
 
       - name: 🧪 Run pytest
         run: |
