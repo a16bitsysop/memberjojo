@@ -1,10 +1,17 @@
 name: lint and pytest
 
-on: [push, pull_request]
+on:
+  push:
+    branches: ["main"]
+  pull_request:
 
 jobs:
   lint_pytest:
     runs-on: ubuntu-latest
+
+    # Prevent double runs:
+    # - Run push jobs only when the push is *not* part of a PR
+    if: github.event_name != 'push' || github.event.pull_request == null
 
     steps:
       - name: 📥 Checkout repository
@@ -26,10 +33,11 @@ jobs:
 
       - name: 🧪 Run pytest
         run: |
-            coverage run -m pytest
-            coverage report -m
+          coverage run -m pytest
+          coverage report -m
 
       - name: Run markdownlint
         uses: DavidAnson/markdownlint-cli2-action@v21
         with:
           globs: '**/*.md'
+
