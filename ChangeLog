@@ -1,0 +1,4 @@
+1.2: 22-11-2025
+  * add get_mojo_name function to Member class with support for initals searching
+    so name can be found without getting number first and then looking up name from number
+  * change get_number to use get_mojo_name
