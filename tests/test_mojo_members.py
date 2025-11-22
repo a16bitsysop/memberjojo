@@ -183,3 +183,23 @@ def test_get_number_first_last_more_names(member_db):
         member_db.get_number("Emily Sara", found_error=True)
 
     assert "Cannot find" in str(exc_info.value)
+
+
+def test_single_word_name(member_db):
+    """
+    Test passing a one word name
+    """
+    assert member_db.get_mojo_name("TestName", found_error=False) is None
+
+    with pytest.raises(ValueError, match=r"❌ Cannot extract name from: TestName"):
+        member_db.get_mojo_name("TestName", found_error=True)
+
+
+def test_initial_name(member_db):
+    """
+    Test matching initial to full name
+    """
+    assert member_db.get_mojo_name("J Doe", found_error=True) == ("John", "Doe")
+    assert member_db.get_mojo_name("J A Doe", found_error=True) == ("John", "Doe")
+    assert member_db.get_mojo_name("A J Doe", found_error=True) == ("John", "Doe")
+    assert member_db.get_mojo_name("A Doe") is None
