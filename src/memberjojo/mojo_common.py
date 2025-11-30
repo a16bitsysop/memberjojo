@@ -9,11 +9,7 @@ import subprocess
 import sqlite3
 from pathlib import Path
 from csv import DictReader
-from collections import defaultdict, Counter
 from decimal import Decimal
-from sqlite3 import IntegrityError, OperationalError, DatabaseError
-
-from .config import CSV_ENCODING  # import encoding from config.py
 
 
 class MojoSkel:
@@ -33,200 +29,45 @@ class MojoSkel:
         :param table_name: Name of the table to operate on, or create when importing.
         :param db_key: (optional) key to unlock the encrypted sqlite database, unencrypted if unset.
         """
-        if db_key is None:
-            self.conn = sqlite3.connect(db_path)
-            print("Unencrypted database loaded.")
-        else:
-            # Dump decrypted SQL from SQLCipher
-            sql_commands = [
-                f"PRAGMA key='{db_key}';",
-                ".output stdout",
-                ".dump",
-            ]
-            dump_sql = self._run_sqlcipher(sql_commands)
-
-            # SQLCipher may output "ok" after PRAGMA key, which is not valid SQL.
-            # Filter out lines that are not SQL statements.
-            filtered_dump_sql = "\n".join(
-                line for line in dump_sql.splitlines() if line.strip() != "ok"
-            )
-
-            # Load into in-memory SQLite
-            self.conn = sqlite3.connect(":memory:")
-            self.conn.executescript(filtered_dump_sql)
-
-            print("Decrypted database loaded in-memory securely.")
-
-        self.conn.row_factory = sqlite3.Row
-        self.cursor = self.conn.cursor()
+        self.db_path = db_path
         self.table_name = table_name
         self.columns = {}
-        self.db_path = db_path
 
-    def _guess_type(self, value: any) -> str:
-        """
-        Guess the SQLite data type of a CSV field value.
+        if db_key is None:
+            self.conn = sqlite3.connect(db_path)
+            self.conn.row_factory = sqlite3.Row
+            self.cursor = self.conn.cursor()
 
-        :param value: The value from a CSV field.
-
-        :return: One of 'INTEGER', 'REAL', or 'TEXT'.
-        """
-        if value is None:
-            return "TEXT"
-
-        if isinstance(value, str):
-            value = value.strip()
-            if value == "":
-                return "TEXT"
-
-        try:
-            int(value)
-            return "INTEGER"
-        except (ValueError, TypeError):
-            try:
-                float(value)
-                return "REAL"
-            except (ValueError, TypeError):
-                return "TEXT"
-
-    def _infer_columns_from_rows(self, rows: list[dict]):
-        """
-        Infer SQLite column types based on sample CSV data.
-
-        :param rows: Sample rows from CSV to analyze.
-        """
-        type_counters = defaultdict(Counter)
-
-        for row in rows:
-            for key, value in row.items():
-                guessed_type = self._guess_type(value)
-                type_counters[key][guessed_type] += 1
-
-        self.columns = {}
-        for col, counter in type_counters.items():
-            if counter["TEXT"] == 0:
-                if counter["REAL"] > 0:
-                    self.columns[col] = "REAL"
-                else:
-                    self.columns[col] = "INTEGER"
+            if db_path == ":memory:":
+                db_name = db_path
             else:
-                self.columns[col] = "TEXT"
+                db_name = db_path.name
+            print(f"Unencrypted database {db_name} loaded.")
+        else:
+            self._load_encrypted_db(db_key)
 
-        print("Inferred columns:", self.columns)
+    def _load_encrypted_db(self, db_key):
+        # Dump decrypted SQL from SQLCipher
+        sql_commands = [
+            f"PRAGMA key='{db_key}';",
+            ".output stdout",
+            ".dump",
+        ]
+        dump_sql = self._run_sqlcipher(sql_commands)
 
-    def _create_full_tables(self, table: str, primary_col: str):
-        """
-        Create the table if it doesn't exist, using inferred schema.
-
-        :param table: Table name.
-        :param primary_col: Column to use as primary key, or None for default.
-        """
-        col_names = list(self.columns.keys())
-        if primary_col is None:
-            primary_col = col_names[0]
-        elif primary_col not in self.columns:
-            raise ValueError(f"Primary key column '{primary_col}' not found in CSV.")
-
-        cols_def = ", ".join(
-            f'"{col}" {col_type}{" PRIMARY KEY" if col == primary_col else ""}'
-            for col, col_type in self.columns.items()
+        # SQLCipher may output "ok" after PRAGMA key, which is not valid SQL.
+        # Filter out lines that are not SQL statements.
+        filtered_dump_sql = "\n".join(
+            line for line in dump_sql.splitlines() if line.strip() != "ok"
         )
 
-        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({cols_def})')
-        self.conn.commit()
+        # Load into in-memory SQLite
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.executescript(filtered_dump_sql)
+        self.conn.row_factory = sqlite3.Row
+        self.cursor = self.conn.cursor()
 
-    def _parse_row_values(self, row: dict, column_types: dict) -> tuple:
-        """
-        Convert CSV row string values to types suitable for SQLite.
-
-        :param row: A dictionary from the CSV row.
-        :param column_types: Mapping of column names to SQLite types.
-
-        :return: Parsed values.
-        """
-        values = []
-        for col, col_type in column_types.items():
-            val = row.get(col, "")
-            if val is None or val.strip() == "":
-                values.append(None)
-            elif col_type == "REAL":
-                values.append(float(val))
-            elif col_type == "INTEGER":
-                values.append(int(val))
-            else:
-                values.append(val)
-        return tuple(values)
-
-    def import_csv(self, csv_path: Path, pk_column: str = None, sample_size: int = 100):
-        """
-        Import a csv file into SQLite.
-
-        Infers column types and logs failed rows. Creates the table if needed.
-
-        :param csv_path: Path to the CSV file.
-        :param pk_column: (optional) Primary key column name. Defaults to the first column.
-        :param sample_size: (optional) Number of rows to sample for type inference. Defaults to 100.
-
-        :raises ValueError: If the CSV is empty or contains failed insertions.
-        """
-        try:
-            # First pass: infer schema from sample
-            with csv_path.open(newline="", encoding=CSV_ENCODING) as csvfile:
-                reader = DictReader(csvfile)
-                sample_rows = [row for _, row in zip(range(sample_size), reader)]
-                if not sample_rows:
-                    raise ValueError("CSV file is empty.")
-
-                # Only infer columns if not already set (i.e., first import)
-                if not self.columns:
-                    self._infer_columns_from_rows(sample_rows)
-
-        except FileNotFoundError:
-            print(f"CSV file not found: {csv_path}")
-            return
-
-        # Create table
-        self._create_full_tables(self.table_name, pk_column)
-
-        # Count rows before import
-        count_before = self.count()
-
-        # Second pass: insert all rows
-        failed_rows = []
-        with csv_path.open(newline="", encoding=CSV_ENCODING) as csvfile:
-            reader = DictReader(csvfile)
-            column_list = ", ".join(f'"{col}"' for col in self.columns)
-            placeholders = ", ".join(["?"] * len(self.columns))
-            insert_stmt = f'INSERT OR IGNORE INTO "{self.table_name}" ({column_list}) \
-                VALUES ({placeholders})'
-
-            for row in reader:
-                try:
-                    self.cursor.execute(
-                        insert_stmt, self._parse_row_values(row, self.columns)
-                    )
-
-                except (
-                    IntegrityError,
-                    OperationalError,
-                    DatabaseError,
-                    ValueError,
-                ) as e:
-                    failed_rows.append((row.copy(), str(e)))
-
-            self.conn.commit()
-
-        print(
-            f"Inserted {self.count() - count_before} new rows into '{self.table_name}'."
-        )
-
-        if failed_rows:
-            print(f"{len(failed_rows)} rows failed to insert:")
-            for row, error in failed_rows[:5]:
-                print(f"Failed: {error} | Data: {row}")
-            if len(failed_rows) > 5:
-                print(f"... and {len(failed_rows) - 5} more")
-            raise ValueError(f"Failed to import: {csv_path}")
+        print(f"Encrypted database {self.db_path.name} loaded securely.")
 
     def _run_sqlcipher(self, sql_lines: list[str]):
         """
@@ -260,6 +101,9 @@ class MojoSkel:
         if not csv_path.exists():
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
 
+        # Count rows before import
+        count_before = self.count()
+
         create_table_sql = self._create_table_sql_from_csv(csv_path, table_name)
         lines = [
             f"PRAGMA key='{key}';",
@@ -278,7 +122,12 @@ class MojoSkel:
         ]
 
         print(f"  Importing {csv_path.name} into {self.db_path.name}...")
-        return self._run_sqlcipher(lines)
+        self._run_sqlcipher(lines)
+        # Load the encrypted database into memory
+        self._load_encrypted_db(key)
+        print(
+            f"Inserted {self.count() - count_before} new rows into '{self.table_name}'."
+        )
 
     def _get_column_type_map(self):
         """Return a mapping of column names to their SQL types."""
@@ -341,10 +190,15 @@ class MojoSkel:
     def count(self) -> int:
         """
         Returns count of the number of rows in the table.
+        Safe: returns 0 if the table doesn't exist or the DB is unreadable.
         """
-        self.cursor.execute(f'SELECT COUNT(*) FROM "{self.table_name}"')
-        result = self.cursor.fetchone()
-        return result[0] if result else 0
+        try:
+            self.cursor.execute(f'SELECT COUNT(*) FROM "{self.table_name}"')
+            result = self.cursor.fetchone()
+            return result[0] if result else 0
+        except (sqlite3.OperationalError, sqlite3.DatabaseError, AttributeError):
+            # Table missing, DB unreadable (e.g. encrypted file), or cursor not set
+            return 0
 
     def get_row(self, entry_name: str, entry_value: str) -> dict:
         """

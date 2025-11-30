@@ -64,12 +64,12 @@ class Member(MojoSkel):
         Allow iterating over the class, by outputing all members.
         """
         sql = (
-            f"SELECT member_number, "
-            f"title, "
-            f"first_name, "
-            f"last_name, "
-            f"membermojo_id, "
-            f"short_url "
+            f'SELECT "Member number", '
+            f'"Title", '
+            f'"First name", '
+            f'"Last name", '
+            f'"membermojo ID", '
+            f'"Short URL" '
             f'FROM "{self.table_name}"'
         )
         self.cursor.execute(sql)
@@ -86,12 +86,12 @@ class Member(MojoSkel):
         """
         sql_statements = [
             f"""CREATE TABLE IF NOT EXISTS "{self.table_name}" (
-                member_number INTEGER PRIMARY KEY,
-                title TEXT NOT NULL CHECK(title IN ('Dr', 'Mr', 'Mrs', 'Miss', 'Ms')),
-                first_name TEXT NOT NULL,
-                last_name TEXT NOT NULL,
-                membermojo_id INTEGER UNIQUE NOT NULL,
-                short_url TEXT NOT NULL
+                "Member number" INTEGER PRIMARY KEY,
+                "Title" TEXT NOT NULL CHECK(Title IN ('Dr', 'Mr', 'Mrs', 'Miss', 'Ms')),
+                "First name" TEXT NOT NULL,
+                "Last name" TEXT NOT NULL,
+                "membermojo ID" INTEGER UNIQUE NOT NULL,
+                "Short URL" TEXT NOT NULL
             );"""
         ]
 
@@ -114,9 +114,9 @@ class Member(MojoSkel):
         :raises ValueError: If not found and `found_error` is True.
         """
         sql = f"""
-            SELECT member_number
+            SELECT "Member number"
             FROM "{self.table_name}"
-            WHERE LOWER(first_name) = LOWER(?) AND LOWER(last_name) = LOWER(?)
+            WHERE LOWER("First name") = LOWER(?) AND LOWER("Last name") = LOWER(?)
         """
         self.cursor.execute(sql, (first_name, last_name))
         result = self.cursor.fetchone()
@@ -156,14 +156,14 @@ class Member(MojoSkel):
         :return: Name on membermojo or None
         """
         sql = f"""
-                SELECT first_name, last_name
+                SELECT "First name", "Last name"
                 FROM "{self.table_name}"
-                WHERE LOWER(first_name) = LOWER(?)
-                    AND LOWER(last_name)  = LOWER(?)
+                WHERE LOWER("First name") = LOWER(?)
+                    AND LOWER("Last name")  = LOWER(?)
         """
         self.cursor.execute(sql, (first_name, last_name))
         row = self.cursor.fetchone()
-        return (row["first_name"], row["last_name"]) if row else None
+        return (row["First name"], row["Last name"]) if row else None
 
     def _lookup_initial(self, letter: str, last_name: str) -> Optional[tuple]:
         """
@@ -175,15 +175,15 @@ class Member(MojoSkel):
         :return: Name on membermojo or None
         """
         sql = f"""
-                SELECT first_name, last_name
+                SELECT "First name", "Last name"
                 FROM "{self.table_name}"
-                WHERE LOWER(first_name) LIKE LOWER(?) || '%'
-                    AND LOWER(last_name) = LOWER(?)
+                WHERE LOWER("First name") LIKE LOWER(?) || '%'
+                    AND LOWER("Last name") = LOWER(?)
                 LIMIT 1
         """
         self.cursor.execute(sql, (letter, last_name))
         row = self.cursor.fetchone()
-        return (row["first_name"], row["last_name"]) if row else None
+        return (row["First name"], row["Last name"]) if row else None
 
     def get_mojo_name(
         self, full_name: str, found_error: bool = False
@@ -277,9 +277,9 @@ class Member(MojoSkel):
         :return: Full name as tuple, or None if not found.
         """
         sql = f"""
-            SELECT first_name, last_name
+            SELECT "First name", "Last name"
             FROM "{self.table_name}"
-            WHERE member_number = ?
+            WHERE "Member number" = ?
             """
         self.cursor.execute(sql, (member_number,))
         result = self.cursor.fetchone()
@@ -309,7 +309,7 @@ class Member(MojoSkel):
         :param member: The member to add.
         """
         sql = f"""INSERT OR ABORT INTO "{self.table_name}"
-            (member_number, title, first_name, last_name, membermojo_id, short_url)
+            ("Member number", "Title", "First name", "Last name", "membermojo ID", "Short URL")
             VALUES (?, ?, ?, ?, ?, ?)"""
 
         try:
@@ -331,7 +331,7 @@ class Member(MojoSkel):
         except sqlite3.IntegrityError:
             pass
 
-    def import_partial_csv(self, csv_path: Path):
+    def import_csv(self, csv_path: Path):
         """
         Load members from a Membermojo CSV file and insert into the database.
 

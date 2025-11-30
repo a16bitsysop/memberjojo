@@ -97,7 +97,28 @@ def member_db(db_path, mock_csv_file):
     Test sqlite member database
     """
     test_db = Member(db_path)
-    test_db.import_csv(mock_csv_file)
+    test_db.import_partial_csv(mock_csv_file)
+    return test_db
+
+
+@pytest.fixture
+def encrypt_db_path():
+    """
+    Temp file for db connection
+    """
+    with NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        path = Path(tmp.name)
+    yield path
+    path.unlink()
+
+
+@pytest.fixture
+def encrypt_member_db(encrypt_db_path, mock_csv_file):
+    """
+    Test sqlite member database
+    """
+    test_db = Member(encrypt_db_path)
+    test_db.import_csv_into_encrypted_db(mock_csv_file, "A Password1234", "MemberS")
     return test_db
 
 
@@ -109,7 +130,7 @@ def test_empty_db(capsys):
     Test empty db
     """
     with NamedTemporaryFile(suffix=".db") as tmp:
-        empty_db = Member(tmp.name)
+        empty_db = Member(Path(tmp.name))
         # create tables so is empty database
         empty_db._create_tables()  # pylint: disable=protected-access
         empty_db.show_table()
@@ -124,7 +145,7 @@ def test_invalid_csv_path_message(tmp_path, db_path, capsys):
     """
     non_exist = Path(tmp_path, "non-exist.csv")
     txn = Member(db_path)
-    txn.import_csv(non_exist)
+    txn.import_partial_csv(non_exist)
     # Capture stdout
     captured = capsys.readouterr()
     assert "CSV file not found" in captured.out
@@ -150,6 +171,23 @@ def test_member_import_and_validation(member_db):
 
     # Should not be inserted due to invalid title
     assert member_db.get_number_first_last("Rick", "Grimes") is None
+
+
+def test_sqlcipher(encrypt_member_db):
+    """
+    Test using sqlcipher to save and encrypted DB
+    """
+    # Should be equal as default show_table is 5 entries and member_db is 2
+    entries = encrypt_member_db.count()
+    # 5 as encrypted db does not skip duplicate entries
+    assert entries == 5
+
+    assert encrypt_member_db.get_number("Dr Jane Smith") == 2
+    assert encrypt_member_db.get_number("John Jojo Doe") == 1
+    with pytest.raises(ValueError) as exc_info:
+        encrypt_member_db.get_number("Emily Sara", found_error=True)
+
+    assert "Cannot find" in str(exc_info.value)
 
 
 def test_show_table(member_db):
