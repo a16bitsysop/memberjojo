@@ -45,13 +45,19 @@ class Member(MojoSkel):
 
     :param member_db_path (Path): Path to the SQLite database file.
     :param table_name (str): (optional) Table name to use. Defaults to "members".
+    :param db_key: (optional) key to unlock the encrypted sqlite database, unencrypted if unset.
     """
 
-    def __init__(self, member_db_path: Path, table_name: str = "members"):
+    def __init__(
+        self,
+        member_db_path: Path,
+        table_name: str = "members",
+        db_key: str | None = None,
+    ):
         """
         Initialize the Member database handler.
         """
-        super().__init__(member_db_path, table_name)
+        super().__init__(member_db_path, table_name, db_key)
 
     def __iter__(self):
         """
@@ -325,7 +331,7 @@ class Member(MojoSkel):
         except sqlite3.IntegrityError:
             pass
 
-    def import_csv(self, csv_path: Path):
+    def import_partial_csv(self, csv_path: Path):
         """
         Load members from a Membermojo CSV file and insert into the database.
 
