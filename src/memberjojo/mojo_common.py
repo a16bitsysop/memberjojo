@@ -5,12 +5,12 @@ This module provides a common base class (`MojoSkel`) for other `memberjojo` mod
 It includes helper methods for working with SQLite databases.
 """
 
-import subprocess
-import sqlite3
-from pathlib import Path
 from csv import DictReader
 from decimal import Decimal
+from pathlib import Path
 from typing import Union, List
+
+from sqlcipher3 import dbapi2 as sqlite
 
 
 class MojoSkel:
@@ -34,68 +34,19 @@ class MojoSkel:
         self.table_name = table_name
         self.columns = {}
 
+        self.conn = sqlite3.connect(db_path)
+        self.conn.row_factory = sqlite3.Row
+        self.cursor = self.conn.cursor()
         if db_key is None:
-            self.conn = sqlite3.connect(db_path)
-            self.conn.row_factory = sqlite3.Row
-            self.cursor = self.conn.cursor()
-
             if db_path == ":memory:":
                 db_name = db_path
             else:
                 db_name = db_path.name
             print(f"Unencrypted database {db_name} loaded.")
         else:
-            self._load_encrypted_db(db_key)
-
-    def _load_encrypted_db(self, db_key):
-        # Dump decrypted SQL from SQLCipher
-        sql_commands = [
-            f"PRAGMA key='{db_key}';",
-            ".output stdout",
-            ".dump",
-        ]
-        dump_sql = self._run_sqlcipher(sql_commands)
-
-        # SQLCipher may output "ok" after PRAGMA key, which is not valid SQL.
-        # Filter out lines that are not SQL statements.
-        filtered_dump_sql = "\n".join(
-            line for line in dump_sql.splitlines() if line.strip() != "ok"
-        )
-
-        # Load into in-memory SQLite
-        self.conn = sqlite3.connect(":memory:")
-        self.conn.executescript(filtered_dump_sql)
-        self.conn.row_factory = sqlite3.Row
-        self.cursor = self.conn.cursor()
-
-        print(f"Encrypted database {self.db_path.name} loaded securely.")
-
-    def _run_sqlcipher(self, sql_lines: list[str]):
-        """
-        Run SQLCipher with a list of raw lines.
-        Dot-commands must not be indented or mixed with semicolon SQL.
-        Uses a context manager for cleaner subprocess handling.
-        """
-
-        script = "".join(
-            line if line.endswith("\n") else line + "\n" for line in sql_lines
-        )
-
-        # Use context manager for automatic resource cleanup
-        with subprocess.Popen(
-            ["sqlcipher", str(self.db_path)],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        ) as proc:
-
-            out, err = proc.communicate(script)
-
-            if proc.returncode != 0:
-                raise RuntimeError(f"SQLCipher failed:\n{err}")
-
-            return out
+            self.conn.execute(f"PRAGMA key='{db_key}'")
+            self.conn.execute("PRAGMA cipher_compatibility = 3")
+            print(f"Encrypted database {self.db_path.name} loaded securely.")
 
     def import_csv_into_encrypted_db(self, csv_path: Path, key: str, table_name: str):
         """Import a CSV file into an encrypted SQLCipher database."""
