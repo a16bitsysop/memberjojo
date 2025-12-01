@@ -10,6 +10,7 @@ import sqlite3
 from pathlib import Path
 from csv import DictReader
 from decimal import Decimal
+from typing import Union, List
 
 
 class MojoSkel:
@@ -218,16 +219,23 @@ class MojoSkel:
         row = self.cursor.fetchone()
         return dict(row) if row else None
 
-    def get_row_multi(self, match_dict: dict) -> dict:
+    def get_row_multi(
+        self, match_dict: dict, only_one: bool = True
+    ) -> Union[sqlite3.Row, List[sqlite3.Row], None]:
         """
-        Retrieve the first row matching multiple column = value pairs.
+        Retrieve one or many rows matching multiple column=value pairs.
 
         :param match_dict: Dictionary of column names and values to match.
+        :param only_one: If True (default), return the first matching row.
+                        If False, return a list of all matching rows.
 
-        :return: The first matching row, or None if not found.
+        :return:
+            - If only_one=True → a single sqlite3.Row or None
+            - If only_one=False → list of sqlite3.Row (may be empty)
         """
         conditions = []
         values = []
+
         for col, val in match_dict.items():
             if val is None or val == "":
                 conditions.append(f'"{col}" IS NULL')
@@ -239,6 +247,15 @@ class MojoSkel:
                     else val
                 )
 
-        query = f'SELECT * FROM "{self.table_name}" WHERE {" AND ".join(conditions)} LIMIT 1'
-        self.cursor.execute(query, values)
-        return self.cursor.fetchone()
+        base_query = (
+            f'SELECT * FROM "{self.table_name}" WHERE {" AND ".join(conditions)}'
+        )
+
+        if only_one:
+            query = base_query + " LIMIT 1"
+            self.cursor.execute(query, values)
+            return self.cursor.fetchone()
+
+        # Return *all* rows
+        self.cursor.execute(base_query, values)
+        return self.cursor.fetchall()
