@@ -10,7 +10,17 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Union, List
 
-from sqlcipher3 import dbapi2 as sqlite
+try:
+    from sqlcipher3 import dbapi2 as sqlite3
+
+    SQLCIPHER_AVAILABLE = True
+except ImportError:
+    import sqlite3
+
+    SQLCIPHER_AVAILABLE = False
+
+
+from .config import CSV_ENCODING  # import encoding from config.py
 
 
 class MojoSkel:
@@ -33,53 +43,62 @@ class MojoSkel:
         self.db_path = db_path
         self.table_name = table_name
         self.columns = {}
+        self.conn = None
+        self._connect_db(db_key)
 
-        self.conn = sqlite3.connect(db_path)
+    def _connect_db(self, key: str = None):
+        """Connect to sqlite db, and if key is set then use SqlCipher extension"""
+        # Close existing connection if it exists
+        if self.conn:
+            self.conn.close()
+
+        # Open new connection
+        self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
-        if db_key is None:
-            if db_path == ":memory:":
-                db_name = db_path
-            else:
-                db_name = db_path.name
-            print(f"Unencrypted database {db_name} loaded.")
-        else:
-            self.conn.execute(f"PRAGMA key='{db_key}'")
-            self.conn.execute("PRAGMA cipher_compatibility = 3")
+
+        # Apply SQLCipher key if provided
+        if key:
+            self.cursor.execute(f"PRAGMA key='{key}'")
+            self.cursor.execute("PRAGMA cipher_compatibility = 4")
             print(f"Encrypted database {self.db_path.name} loaded securely.")
+        else:
+            if self.db_path == ":memory:":
+                db_name = self.db_path
+            else:
+                db_name = self.db_path.name
+            print(f"Unencrypted database {db_name} loaded.")
 
     def import_csv_into_encrypted_db(self, csv_path: Path, key: str, table_name: str):
-        """Import a CSV file into an encrypted SQLCipher database."""
+        """Import CSV into an encrypted SQLCipher database using sqlcipher3."""
         if not csv_path.exists():
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
 
-        # Count rows before import
         count_before = self.count()
+        self._connect_db(key)
 
-        create_table_sql = self._create_table_sql_from_csv(csv_path, table_name)
-        lines = [
-            f"PRAGMA key='{key}';",
-            "PRAGMA cipher_compatibility = 4;",
-            "",
-            # Drop table if it exists to ensure clean import
-            f"DROP TABLE IF EXISTS {table_name};",
-            "",
-            # Table creation SQL
-            create_table_sql.strip() + ";",
-            "",
-            # Dot commands MUST be raw, no indentation!
-            # Skip first row as it is headers
-            ".mode csv",
-            f'.import --skip 1 "{csv_path}" {table_name}',
-        ]
+        # Drop existing table
+        self.cursor.execute(f'DROP TABLE IF EXISTS "{table_name}";')
 
-        print(f"  Importing {csv_path.name} into {self.db_path.name}...")
-        self._run_sqlcipher(lines)
-        # Load the encrypted database into memory
-        self._load_encrypted_db(key)
-        print(
-            f"Inserted {self.count() - count_before} new rows into '{self.table_name}'."
-        )
+        # Create table
+        create_sql = self._create_table_sql_from_csv(csv_path, table_name)
+        self.cursor.execute(create_sql)
+
+        with csv_path.open(newline="", encoding=CSV_ENCODING) as f:
+            reader = DictReader(f)
+            cols = reader.fieldnames
+
+            placeholders = ",".join("?" for _ in cols)
+            colnames = ",".join(f'"{c}"' for c in cols)
+
+            insert_sql = (
+                f'INSERT INTO "{table_name}" ({colnames}) VALUES ({placeholders})'
+            )
+
+            for row in reader:
+                self.cursor.execute(insert_sql, [row[c] for c in cols])
+
+        print(f"Inserted {self.count() - count_before} new rows.")
 
     def _get_column_type_map(self):
         """Return a mapping of column names to their SQL types."""

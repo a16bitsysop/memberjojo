@@ -308,28 +308,25 @@ class Member(MojoSkel):
 
         :param member: The member to add.
         """
-        sql = f"""INSERT OR ABORT INTO "{self.table_name}"
+        sql = f"""INSERT OR IGNORE INTO "{self.table_name}"
             ("Member number", "Title", "First name", "Last name", "membermojo ID", "Short URL")
             VALUES (?, ?, ?, ?, ?, ?)"""
 
-        try:
-            self.cursor.execute(
-                sql,
-                (
-                    member.member_num,
-                    member.title,
-                    member.first_name,
-                    member.last_name,
-                    member.membermojo_id,
-                    member.short_url,
-                ),
-            )
-            self.conn.commit()
-            print(
-                f"Created user {member.member_num}: {member.first_name} {member.last_name}"
-            )
-        except sqlite3.IntegrityError:
-            pass
+        self.cursor.execute(
+            sql,
+            (
+                member.member_num,
+                member.title,
+                member.first_name,
+                member.last_name,
+                member.membermojo_id,
+                member.short_url,
+            ),
+        )
+        self.conn.commit()
+        print(
+            f"Created user {member.member_num}: {member.first_name} {member.last_name}"
+        )
 
     def import_csv(self, csv_path: Path):
         """
