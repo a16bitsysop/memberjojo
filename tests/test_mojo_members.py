@@ -97,7 +97,7 @@ def member_db(db_path, mock_csv_file):
     Test sqlite member database
     """
     test_db = Member(db_path)
-    test_db.import_partial_csv(mock_csv_file)
+    test_db.import_csv(mock_csv_file)
     return test_db
 
 
@@ -145,7 +145,7 @@ def test_invalid_csv_path_message(tmp_path, db_path, capsys):
     """
     non_exist = Path(tmp_path, "non-exist.csv")
     txn = Member(db_path)
-    txn.import_partial_csv(non_exist)
+    txn.import_csv(non_exist)
     # Capture stdout
     captured = capsys.readouterr()
     assert "CSV file not found" in captured.out

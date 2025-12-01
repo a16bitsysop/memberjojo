@@ -42,7 +42,7 @@ def test_member_iter(tmp_path):
 
     # Instantiate Member and import CSV
     members = Member(db_path)
-    members.import_partial_csv(sample_csv)
+    members.import_csv(sample_csv)
 
     # Collect members from iterator
     iterated_members = list(members)
