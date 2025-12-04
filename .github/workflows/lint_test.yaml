@@ -31,7 +31,17 @@ jobs:
       - name: 🧹 Run pylint
         run: pylint .
 
-      - name: 🧪 Run pytest
+      - name: 🧪 Run pytest without sqlcipher
+        run: |
+          coverage run -m pytest
+          coverage report -m
+
+      - name: 🛠️ Install  sqlcipher and sqlcipher3
+        run: |
+          apt-get --no-install-recommends --no-install-suggests install sqlcipher
+          pip install sqlcipher3
+
+      - name: 🧪 Run pytest with sqlcipher
         run: |
           coverage run -m pytest
           coverage report -m
