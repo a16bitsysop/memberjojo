@@ -7,13 +7,14 @@ This is done in a local SQLite database, and does not alter anything on Membermo
 It provides tools to load, and query membership and transaction data efficiently
 without having to use SQLite directly.\
 If the optional dependency `sqlcipher3` is installed then encrypted SQLite databases
-can be used, there is a separate function `import_csv_into_encrypted_db` that is used
-to import CSV files into an encrypted database.  This is available in both the Member
-and Transaction classes.\
+can be used, there is a separate function `import_csv_into_encrypted_db`
+that is used to import CSV files into an encrypted database.
+This is available in both the Member and Transaction classes.\
 When importing CSV files existing entries are skipped, so you can just import the
 latest download and the local database is updated with new entries.\
 All the transaction data is imported into the database,
-but currently only a limited amount of member data is imported unless the `import_csv_into_encrytped_db` is used.
+but currently only a limited amount of member data is imported
+unless the `import_csv_into_encrytped_db` is used.
 
 ---
 
@@ -28,6 +29,7 @@ pip install memberjojo
 Installing via `pip` on macos with `sqlcipher` installed via homebrew and use `sqlcipher3`:\
 (The sqlcipher bindings are compiled by pip so the `C_INCLUDE_PATH` is needed
 for 'clang' to be able to find the header files)\
+
 ```bash
 brew install sqlcipher
 C_INCLUDE_PATH="/opt/homebrew/opt/sqlcipher/include" pip install memberjojo[sqlcipher]
