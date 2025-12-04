@@ -38,7 +38,7 @@ jobs:
 
       - name: 🛠️ Install  sqlcipher and sqlcipher3
         run: |
-          apt-get --no-install-recommends --no-install-suggests install sqlcipher
+          sudo apt-get --no-install-recommends --no-install-suggests install sqlcipher
           pip install sqlcipher3
 
       - name: 🧪 Run pytest with sqlcipher
