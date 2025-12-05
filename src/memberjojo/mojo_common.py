@@ -84,13 +84,18 @@ class MojoSkel:
             reader = DictReader(f)
             cols = reader.fieldnames
 
+            # Normalise mapping
+            norm_map = {c: self._normalize(c) for c in cols}
+
+            # Build INSERT
+            colnames = ",".join(f'"{norm_map[c]}"' for c in cols)
             placeholders = ",".join("?" for _ in cols)
-            colnames = ",".join(f'"{c}"' for c in cols)
 
             insert_sql = (
                 f'INSERT INTO "{self.table_name}" ({colnames}) VALUES ({placeholders})'
             )
 
+            # Insert rows
             for row in reader:
                 self.cursor.execute(insert_sql, [row[c] for c in cols])
 
@@ -100,12 +105,11 @@ class MojoSkel:
         """Return a mapping of column names to their SQL types."""
         return {
             # Integer columns
-            "Member Number": "INTEGER",
-            "Member number": "INTEGER",
-            "membermojo ID": "INTEGER",
+            "member_number": "INTEGER",
+            "membermojo_id": "INTEGER",
             # Real/Float columns
-            "Cost": "REAL",
-            "Paid": "REAL",
+            "cost": "REAL",
+            "paid": "REAL",
             # All other columns default to TEXT
         }
 
@@ -125,9 +129,8 @@ class MojoSkel:
         type_map = self._get_column_type_map()
 
         # Default primary key = first column if not provided
-        if primary_col is None and columns:
-            primary_col = columns[0]
-        primary_col = self._normalize(primary_col)
+        if primary_col:
+            primary_col = self._normalize(primary_col)
 
         column_defs = []
         for col in columns:

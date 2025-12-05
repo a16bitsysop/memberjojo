@@ -28,7 +28,7 @@ class MemberData:
         short_url (str): Short URL to Membermojo profile.
     """
 
-    member_num: int
+    member_number: int
     title: str
     first_name: str
     last_name: str
@@ -60,22 +60,18 @@ class Member(MojoSkel):
         super().__init__(member_db_path, table_name, db_key)
 
     def __iter__(self):
-        """
-        Allow iterating over the class, by outputing all members.
-        """
-        sql = (
-            f'SELECT "Member number", '
-            f'"Title", '
-            f'"First name", '
-            f'"Last name", '
-            f'"membermojo ID", '
-            f'"Short URL" '
-            f'FROM "{self.table_name}"'
+        cursor = self.conn.execute(
+            f'SELECT * FROM "{self.table_name}" ORDER BY member_number'
         )
-        self.cursor.execute(sql)
-        rows = self.cursor.fetchall()
-        for row in rows:
-            yield MemberData(*row)
+        col_names = [col[0] for col in cursor.description]
+
+        for row in cursor:
+            row_dict = dict(zip(col_names, row))
+
+            # auto-normalise column names
+            pythonised = {self._normalize(col): val for col, val in row_dict.items()}
+
+            yield MemberData(**pythonised)
 
     def _create_tables(self):
         """
@@ -315,7 +311,7 @@ class Member(MojoSkel):
         self.cursor.execute(
             sql,
             (
-                member.member_num,
+                member.member_number,
                 member.title,
                 member.first_name,
                 member.last_name,
@@ -325,7 +321,7 @@ class Member(MojoSkel):
         )
         self.conn.commit()
         print(
-            f"Created user {member.member_num}: {member.first_name} {member.last_name}"
+            f"Created user {member.member_number}: {member.first_name} {member.last_name}"
         )
 
     def import_csv(self, csv_path: Path):
@@ -346,7 +342,7 @@ class Member(MojoSkel):
 
                 for row in mojo_reader:
                     member = MemberData(
-                        member_num=int(row["Member number"]),
+                        member_number=int(row["Member number"]),
                         title=row["Title"].strip(),
                         first_name=row["First name"].strip(),
                         last_name=row["Last name"].strip(),
