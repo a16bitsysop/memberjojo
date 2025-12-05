@@ -117,8 +117,8 @@ def encrypt_member_db(encrypt_db_path, mock_csv_file):
     """
     Test sqlite member database
     """
-    test_db = Member(encrypt_db_path)
-    test_db.import_csv_into_encrypted_db(mock_csv_file, "A Password1234", "MemberS")
+    test_db = Member(encrypt_db_path, "MemberS")
+    test_db.import_csv_into_encrypted_db(mock_csv_file, "A Password1234")
     return test_db
 
 

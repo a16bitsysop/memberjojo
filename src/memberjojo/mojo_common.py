@@ -44,22 +44,16 @@ class MojoSkel:
         self.table_name = table_name
         self.columns = {}
         self.conn = None
-        self._connect_db(db_key)
+        self.db_key = db_key
 
-    def _connect_db(self, key: str = None):
-        """Connect to sqlite db, and if key is set then use SqlCipher extension"""
-        # Close existing connection if it exists
-        if self.conn:
-            self.conn.close()
-
-        # Open new connection
+        # Open connection
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
 
         # Apply SQLCipher key if provided
-        if key:
-            self.cursor.execute(f"PRAGMA key='{key}'")
+        if db_key:
+            self.cursor.execute(f"PRAGMA key='{db_key}'")
             self.cursor.execute("PRAGMA cipher_compatibility = 4")
             print(f"Encrypted database {self.db_path.name} loaded securely.")
         else:
@@ -69,19 +63,20 @@ class MojoSkel:
                 db_name = self.db_path.name
             print(f"Unencrypted database {db_name} loaded.")
 
-    def import_csv_into_encrypted_db(self, csv_path: Path, key: str, table_name: str):
+    def import_csv_into_encrypted_db(self, csv_path: Path, pk_column: str = None):
         """Import CSV into an encrypted SQLCipher database using sqlcipher3."""
         if not csv_path.exists():
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
 
         count_before = self.count()
-        self._connect_db(key)
 
         # Drop existing table
-        self.cursor.execute(f'DROP TABLE IF EXISTS "{table_name}";')
+        self.cursor.execute(f'DROP TABLE IF EXISTS "{self.table_name}";')
 
         # Create table
-        create_sql = self._create_table_sql_from_csv(csv_path, table_name)
+        create_sql = self._create_table_sql_from_csv(
+            csv_path, self.table_name, pk_column
+        )
         self.cursor.execute(create_sql)
 
         with csv_path.open(newline="", encoding=CSV_ENCODING) as f:
@@ -92,7 +87,7 @@ class MojoSkel:
             colnames = ",".join(f'"{c}"' for c in cols)
 
             insert_sql = (
-                f'INSERT INTO "{table_name}" ({colnames}) VALUES ({placeholders})'
+                f'INSERT INTO "{self.table_name}" ({colnames}) VALUES ({placeholders})'
             )
 
             for row in reader:
@@ -113,22 +108,38 @@ class MojoSkel:
             # All other columns default to TEXT
         }
 
-    def _create_table_from_columns(self, table_name: str, columns: list[str]) -> str:
+    def _create_table_from_columns(
+        self,
+        table_name: str,
+        columns: list[str],
+        primary_col: str,
+    ) -> str:
         """Generate CREATE TABLE SQL with proper types for given columns."""
         type_map = self._get_column_type_map()
+
+        # Default primary key = first column if not provided
+        if primary_col is None and columns:
+            primary_col = columns[0]
 
         column_defs = []
         for col in columns:
             col_type = type_map.get(col, "TEXT")  # Default to TEXT
-            column_defs.append(f'    "{col}" {col_type}')
+
+            # Add PRIMARY KEY if this is the chosen column
+            if col == primary_col:
+                column_defs.append(f'    "{col}" {col_type} PRIMARY KEY')
+            else:
+                column_defs.append(f'    "{col}" {col_type}')
 
         return (
-            f"CREATE TABLE IF NOT EXISTS {table_name} (\n"
+            f'CREATE TABLE IF NOT EXISTS "{table_name}" (\n'
             + ",\n".join(column_defs)
             + "\n)"
         )
 
-    def _create_table_sql_from_csv(self, csv_path: Path, table_name: str) -> str:
+    def _create_table_sql_from_csv(
+        self, csv_path: Path, table_name: str, pk_column: str
+    ) -> str:
         """
         Generate CREATE TABLE SQL dynamically from the CSV header
         using csv.DictReader. All columns are TEXT.
@@ -140,7 +151,7 @@ class MojoSkel:
         if not columns:
             raise ValueError(f"CSV file '{csv_path}' has no header row.")
 
-        return self._create_table_from_columns(table_name, columns)
+        return self._create_table_from_columns(table_name, columns, pk_column)
 
     def show_table(self, limit: int = 2):
         """
