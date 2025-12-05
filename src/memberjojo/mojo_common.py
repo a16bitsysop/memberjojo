@@ -108,6 +108,12 @@ class MojoSkel:
             # All other columns default to TEXT
         }
 
+    def _normalize(self, name: str) -> str:
+        """Normalize a column name: lowercase, remove symbols, convert to snake case."""
+        name = name.strip().lower()
+        name = re.sub(r"[^a-z0-9]+", "_", name)
+        return name.strip("_")
+
     def _create_table_from_columns(
         self,
         table_name: str,
@@ -120,16 +126,18 @@ class MojoSkel:
         # Default primary key = first column if not provided
         if primary_col is None and columns:
             primary_col = columns[0]
+        primary_col = self._normalize(primary_col)
 
         column_defs = []
         for col in columns:
-            col_type = type_map.get(col, "TEXT")  # Default to TEXT
+            norm_col = self._normalize(col)
+            col_type = type_map.get(norm_col, "TEXT")  # Default to TEXT
 
             # Add PRIMARY KEY if this is the chosen column
-            if col == primary_col:
-                column_defs.append(f'    "{col}" {col_type} PRIMARY KEY')
+            if norm_col == primary_col:
+                column_defs.append(f'    "{norm_col}" {col_type} PRIMARY KEY')
             else:
-                column_defs.append(f'    "{col}" {col_type}')
+                column_defs.append(f'    "{norm_col}" {col_type}')
 
         return (
             f'CREATE TABLE IF NOT EXISTS "{table_name}" (\n'
