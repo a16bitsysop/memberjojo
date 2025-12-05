@@ -15,6 +15,9 @@ requires-python = ">=3.8"
 Home = "https://github.com/a16bitsysop/memberjojo"
 
 [project.optional-dependencies]
+sqlcipher = [
+    "sqlcipher3"
+]
 dev = [
     "coverage",
     "flit",

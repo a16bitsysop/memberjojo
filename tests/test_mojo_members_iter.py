@@ -53,7 +53,7 @@ def test_member_iter(tmp_path):
     # Check that fields match for first member
     first = iterated_members[0]
     assert isinstance(first, MemberData)
-    assert first.member_num == int(sample_data[0]["Member number"])
+    assert first.member_number == int(sample_data[0]["Member number"])
     assert first.title == sample_data[0]["Title"]
     assert first.first_name == sample_data[0]["First name"]
     assert first.last_name == sample_data[0]["Last name"]

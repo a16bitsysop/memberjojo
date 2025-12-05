@@ -5,14 +5,13 @@ Provides automatic column type inference, robust CSV importing, and
 helper methods for querying the database.
 """
 
-from collections import Counter, defaultdict
+from collections import defaultdict, Counter
 from csv import DictReader
 from pathlib import Path
 from sqlite3 import IntegrityError, OperationalError, DatabaseError
-from decimal import Decimal
 
-from .config import CSV_ENCODING  # import encoding from config.py
 from .mojo_common import MojoSkel
+from .config import CSV_ENCODING  # import encoding from config.py
 
 
 class Transaction(MojoSkel):
@@ -24,14 +23,19 @@ class Transaction(MojoSkel):
 
     :param payment_db_path: Path to the SQLite database.
     :param table_name: (optional) Name of the table. Defaults to "payments".
+    :param db_key: (optional) key to unlock the encrypted sqlite database, unencrypted if unset.
     """
 
-    def __init__(self, payment_db_path: str, table_name: str = "payments"):
+    def __init__(
+        self,
+        payment_db_path: str,
+        table_name: str = "payments",
+        db_key: str | None = None,
+    ):
         """
         Initialize the Transaction object.
         """
-        super().__init__(payment_db_path, table_name)
-        self.columns = {}
+        super().__init__(payment_db_path, table_name, db_key)
 
     def _guess_type(self, value: any) -> str:
         """
@@ -84,7 +88,7 @@ class Transaction(MojoSkel):
 
         print("Inferred columns:", self.columns)
 
-    def _create_tables(self, table: str, primary_col: str):
+    def _create_full_tables(self, table: str, primary_col: str):
         """
         Create the table if it doesn't exist, using inferred schema.
 
@@ -129,7 +133,7 @@ class Transaction(MojoSkel):
 
     def import_csv(self, csv_path: Path, pk_column: str = None, sample_size: int = 100):
         """
-        Import a completed_payments.csv file into SQLite.
+        Import a csv file into SQLite.
 
         Infers column types and logs failed rows. Creates the table if needed.
 
@@ -156,7 +160,7 @@ class Transaction(MojoSkel):
             return
 
         # Create table
-        self._create_tables(self.table_name, pk_column)
+        self._create_full_tables(self.table_name, pk_column)
 
         # Count rows before import
         count_before = self.count()
@@ -197,46 +201,3 @@ class Transaction(MojoSkel):
             if len(failed_rows) > 5:
                 print(f"... and {len(failed_rows) - 5} more")
             raise ValueError(f"Failed to import: {csv_path}")
-
-    def get_row(self, entry_name: str, entry_value: str) -> dict:
-        """
-        Retrieve a single row matching column = value (case-insensitive).
-
-        :param entry_name: Column name to filter by.
-        :param entry_value: Value to match.
-
-        :return: The matching row as a dictionary, or None if not found.
-        """
-        if not entry_value:
-            return None
-        query = (
-            f'SELECT * FROM "{self.table_name}" WHERE LOWER("{entry_name}") = LOWER(?)'
-        )
-        self.cursor.execute(query, (entry_value,))
-        row = self.cursor.fetchone()
-        return dict(row) if row else None
-
-    def get_row_multi(self, match_dict: dict) -> dict:
-        """
-        Retrieve the first row matching multiple column = value pairs.
-
-        :param match_dict: Dictionary of column names and values to match.
-
-        :return: The first matching row, or None if not found.
-        """
-        conditions = []
-        values = []
-        for col, val in match_dict.items():
-            if val is None or val == "":
-                conditions.append(f'"{col}" IS NULL')
-            else:
-                conditions.append(f'"{col}" = ?')
-                values.append(
-                    float(val.quantize(Decimal("0.01")))
-                    if isinstance(val, Decimal)
-                    else val
-                )
-
-        query = f'SELECT * FROM "{self.table_name}" WHERE {" AND ".join(conditions)} LIMIT 1'
-        self.cursor.execute(query, values)
-        return self.cursor.fetchone()

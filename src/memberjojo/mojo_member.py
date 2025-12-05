@@ -28,7 +28,7 @@ class MemberData:
         short_url (str): Short URL to Membermojo profile.
     """
 
-    member_num: int
+    member_number: int
     title: str
     first_name: str
     last_name: str
@@ -45,31 +45,33 @@ class Member(MojoSkel):
 
     :param member_db_path (Path): Path to the SQLite database file.
     :param table_name (str): (optional) Table name to use. Defaults to "members".
+    :param db_key: (optional) key to unlock the encrypted sqlite database, unencrypted if unset.
     """
 
-    def __init__(self, member_db_path: Path, table_name: str = "members"):
+    def __init__(
+        self,
+        member_db_path: Path,
+        table_name: str = "members",
+        db_key: str | None = None,
+    ):
         """
         Initialize the Member database handler.
         """
-        super().__init__(member_db_path, table_name)
+        super().__init__(member_db_path, table_name, db_key)
 
     def __iter__(self):
-        """
-        Allow iterating over the class, by outputing all members.
-        """
-        sql = (
-            f"SELECT member_number, "
-            f"title, "
-            f"first_name, "
-            f"last_name, "
-            f"membermojo_id, "
-            f"short_url "
-            f'FROM "{self.table_name}"'
+        cursor = self.conn.execute(
+            f'SELECT * FROM "{self.table_name}" ORDER BY member_number'
         )
-        self.cursor.execute(sql)
-        rows = self.cursor.fetchall()
-        for row in rows:
-            yield MemberData(*row)
+        col_names = [col[0] for col in cursor.description]
+
+        for row in cursor:
+            row_dict = dict(zip(col_names, row))
+
+            # auto-normalise column names
+            pythonised = {self._normalize(col): val for col, val in row_dict.items()}
+
+            yield MemberData(**pythonised)
 
     def _create_tables(self):
         """
@@ -80,12 +82,12 @@ class Member(MojoSkel):
         """
         sql_statements = [
             f"""CREATE TABLE IF NOT EXISTS "{self.table_name}" (
-                member_number INTEGER PRIMARY KEY,
-                title TEXT NOT NULL CHECK(title IN ('Dr', 'Mr', 'Mrs', 'Miss', 'Ms')),
-                first_name TEXT NOT NULL,
-                last_name TEXT NOT NULL,
-                membermojo_id INTEGER UNIQUE NOT NULL,
-                short_url TEXT NOT NULL
+                "member_number" INTEGER PRIMARY KEY,
+                "title" TEXT NOT NULL CHECK(Title IN ('Dr', 'Mr', 'Mrs', 'Miss', 'Ms')),
+                "first_name" TEXT NOT NULL,
+                "last_name" TEXT NOT NULL,
+                "membermojo_id" INTEGER UNIQUE NOT NULL,
+                "short_url" TEXT NOT NULL
             );"""
         ]
 
@@ -108,9 +110,9 @@ class Member(MojoSkel):
         :raises ValueError: If not found and `found_error` is True.
         """
         sql = f"""
-            SELECT member_number
+            SELECT "member_number"
             FROM "{self.table_name}"
-            WHERE LOWER(first_name) = LOWER(?) AND LOWER(last_name) = LOWER(?)
+            WHERE LOWER("first_name") = LOWER(?) AND LOWER("last_name") = LOWER(?)
         """
         self.cursor.execute(sql, (first_name, last_name))
         result = self.cursor.fetchone()
@@ -150,10 +152,10 @@ class Member(MojoSkel):
         :return: Name on membermojo or None
         """
         sql = f"""
-                SELECT first_name, last_name
+                SELECT "first_name", "last_name"
                 FROM "{self.table_name}"
-                WHERE LOWER(first_name) = LOWER(?)
-                    AND LOWER(last_name)  = LOWER(?)
+                WHERE LOWER("first_name") = LOWER(?)
+                    AND LOWER("last_name")  = LOWER(?)
         """
         self.cursor.execute(sql, (first_name, last_name))
         row = self.cursor.fetchone()
@@ -169,10 +171,10 @@ class Member(MojoSkel):
         :return: Name on membermojo or None
         """
         sql = f"""
-                SELECT first_name, last_name
+                SELECT "first_name", "last_name"
                 FROM "{self.table_name}"
-                WHERE LOWER(first_name) LIKE LOWER(?) || '%'
-                    AND LOWER(last_name) = LOWER(?)
+                WHERE LOWER("first_name") LIKE LOWER(?) || '%'
+                    AND LOWER("last_name") = LOWER(?)
                 LIMIT 1
         """
         self.cursor.execute(sql, (letter, last_name))
@@ -271,9 +273,9 @@ class Member(MojoSkel):
         :return: Full name as tuple, or None if not found.
         """
         sql = f"""
-            SELECT first_name, last_name
+            SELECT "first_name", "last_name"
             FROM "{self.table_name}"
-            WHERE member_number = ?
+            WHERE "member_number" = ?
             """
         self.cursor.execute(sql, (member_number,))
         result = self.cursor.fetchone()
@@ -302,28 +304,25 @@ class Member(MojoSkel):
 
         :param member: The member to add.
         """
-        sql = f"""INSERT OR ABORT INTO "{self.table_name}"
-            (member_number, title, first_name, last_name, membermojo_id, short_url)
+        sql = f"""INSERT OR IGNORE INTO "{self.table_name}"
+            ("member_number", "title", "first_name", "last_name", "membermojo_id", "short_url")
             VALUES (?, ?, ?, ?, ?, ?)"""
 
-        try:
-            self.cursor.execute(
-                sql,
-                (
-                    member.member_num,
-                    member.title,
-                    member.first_name,
-                    member.last_name,
-                    member.membermojo_id,
-                    member.short_url,
-                ),
-            )
-            self.conn.commit()
-            print(
-                f"Created user {member.member_num}: {member.first_name} {member.last_name}"
-            )
-        except sqlite3.IntegrityError:
-            pass
+        self.cursor.execute(
+            sql,
+            (
+                member.member_number,
+                member.title,
+                member.first_name,
+                member.last_name,
+                member.membermojo_id,
+                member.short_url,
+            ),
+        )
+        self.conn.commit()
+        print(
+            f"Created user {member.member_number}: {member.first_name} {member.last_name}"
+        )
 
     def import_csv(self, csv_path: Path):
         """
@@ -343,7 +342,7 @@ class Member(MojoSkel):
 
                 for row in mojo_reader:
                     member = MemberData(
-                        member_num=int(row["Member number"]),
+                        member_number=int(row["Member number"]),
                         title=row["Title"].strip(),
                         first_name=row["First name"].strip(),
                         last_name=row["Last name"].strip(),
