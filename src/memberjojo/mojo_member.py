@@ -309,7 +309,7 @@ class Member(MojoSkel):
         :param member: The member to add.
         """
         sql = f"""INSERT OR IGNORE INTO "{self.table_name}"
-            ("member_number", "title", "first_name", "last_name", "membermojo_id", "short_url")
+            ("Member number", "Title", "First name", "Last name", "membermojo ID", "Short URL")
             VALUES (?, ?, ?, ?, ?, ?)"""
 
         self.cursor.execute(
