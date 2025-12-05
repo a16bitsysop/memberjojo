@@ -9,6 +9,7 @@ from csv import DictReader
 from decimal import Decimal
 from pathlib import Path
 from typing import Union, List
+import re
 
 try:
     from sqlcipher3 import dbapi2 as sqlite3
