@@ -86,12 +86,12 @@ class Member(MojoSkel):
         """
         sql_statements = [
             f"""CREATE TABLE IF NOT EXISTS "{self.table_name}" (
-                "Member number" INTEGER PRIMARY KEY,
-                "Title" TEXT NOT NULL CHECK(Title IN ('Dr', 'Mr', 'Mrs', 'Miss', 'Ms')),
-                "First name" TEXT NOT NULL,
-                "Last name" TEXT NOT NULL,
-                "membermojo ID" INTEGER UNIQUE NOT NULL,
-                "Short URL" TEXT NOT NULL
+                "member_number" INTEGER PRIMARY KEY,
+                "title" TEXT NOT NULL CHECK(Title IN ('Dr', 'Mr', 'Mrs', 'Miss', 'Ms')),
+                "first_name" TEXT NOT NULL,
+                "last_name" TEXT NOT NULL,
+                "membermojo_id" INTEGER UNIQUE NOT NULL,
+                "short_url" TEXT NOT NULL
             );"""
         ]
 
@@ -309,7 +309,7 @@ class Member(MojoSkel):
         :param member: The member to add.
         """
         sql = f"""INSERT OR IGNORE INTO "{self.table_name}"
-            ("Member number", "Title", "First name", "Last name", "membermojo ID", "Short URL")
+            ("member_number", "title", "first_name", "last_name", "membermojo_id", "short_url")
             VALUES (?, ?, ?, ?, ?, ?)"""
 
         self.cursor.execute(
@@ -346,12 +346,12 @@ class Member(MojoSkel):
 
                 for row in mojo_reader:
                     member = MemberData(
-                        member_num=int(row["member_number"]),
-                        title=row["title"].strip(),
-                        first_name=row["first_name"].strip(),
-                        last_name=row["last_name"].strip(),
-                        membermojo_id=int(row["membermojo_id"]),
-                        short_url=row["short_url"].strip(),
+                        member_num=int(row["Member number"]),
+                        title=row["Title"].strip(),
+                        first_name=row["First name"].strip(),
+                        last_name=row["Last name"].strip(),
+                        membermojo_id=int(row["membermojo ID"]),
+                        short_url=row["Short URL"].strip(),
                     )
                     self._add(member)
         except FileNotFoundError:
