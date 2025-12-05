@@ -114,9 +114,9 @@ class Member(MojoSkel):
         :raises ValueError: If not found and `found_error` is True.
         """
         sql = f"""
-            SELECT "Member number"
+            SELECT "member_number"
             FROM "{self.table_name}"
-            WHERE LOWER("First name") = LOWER(?) AND LOWER("Last name") = LOWER(?)
+            WHERE LOWER("first_name") = LOWER(?) AND LOWER("last_name") = LOWER(?)
         """
         self.cursor.execute(sql, (first_name, last_name))
         result = self.cursor.fetchone()
@@ -156,14 +156,14 @@ class Member(MojoSkel):
         :return: Name on membermojo or None
         """
         sql = f"""
-                SELECT "First name", "Last name"
+                SELECT "first_name", "last_name"
                 FROM "{self.table_name}"
-                WHERE LOWER("First name") = LOWER(?)
-                    AND LOWER("Last name")  = LOWER(?)
+                WHERE LOWER("first_name") = LOWER(?)
+                    AND LOWER("last_name")  = LOWER(?)
         """
         self.cursor.execute(sql, (first_name, last_name))
         row = self.cursor.fetchone()
-        return (row["First name"], row["Last name"]) if row else None
+        return (row["first_name"], row["last_name"]) if row else None
 
     def _lookup_initial(self, letter: str, last_name: str) -> Optional[tuple]:
         """
@@ -175,15 +175,15 @@ class Member(MojoSkel):
         :return: Name on membermojo or None
         """
         sql = f"""
-                SELECT "First name", "Last name"
+                SELECT "first_name", "last_name"
                 FROM "{self.table_name}"
-                WHERE LOWER("First name") LIKE LOWER(?) || '%'
-                    AND LOWER("Last name") = LOWER(?)
+                WHERE LOWER("first_name") LIKE LOWER(?) || '%'
+                    AND LOWER("last_name") = LOWER(?)
                 LIMIT 1
         """
         self.cursor.execute(sql, (letter, last_name))
         row = self.cursor.fetchone()
-        return (row["First name"], row["Last name"]) if row else None
+        return (row["first_name"], row["last_name"]) if row else None
 
     def get_mojo_name(
         self, full_name: str, found_error: bool = False
@@ -277,9 +277,9 @@ class Member(MojoSkel):
         :return: Full name as tuple, or None if not found.
         """
         sql = f"""
-            SELECT "First name", "Last name"
+            SELECT "first_name", "last_name"
             FROM "{self.table_name}"
-            WHERE "Member number" = ?
+            WHERE "member_number" = ?
             """
         self.cursor.execute(sql, (member_number,))
         result = self.cursor.fetchone()
@@ -309,7 +309,7 @@ class Member(MojoSkel):
         :param member: The member to add.
         """
         sql = f"""INSERT OR IGNORE INTO "{self.table_name}"
-            ("Member number", "Title", "First name", "Last name", "membermojo ID", "Short URL")
+            ("member_number", "title", "first_name", "last_name", "membermojo_id", "short_url")
             VALUES (?, ?, ?, ?, ?, ?)"""
 
         self.cursor.execute(
@@ -346,12 +346,12 @@ class Member(MojoSkel):
 
                 for row in mojo_reader:
                     member = MemberData(
-                        member_num=int(row["Member number"]),
-                        title=row["Title"].strip(),
-                        first_name=row["First name"].strip(),
-                        last_name=row["Last name"].strip(),
-                        membermojo_id=int(row["membermojo ID"]),
-                        short_url=row["Short URL"].strip(),
+                        member_num=int(row["member_number"]),
+                        title=row["title"].strip(),
+                        first_name=row["first_name"].strip(),
+                        last_name=row["last_name"].strip(),
+                        membermojo_id=int(row["membermojo_id"]),
+                        short_url=row["short_url"].strip(),
                     )
                     self._add(member)
         except FileNotFoundError:
