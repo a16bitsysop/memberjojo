@@ -29,8 +29,8 @@ class Transaction(MojoSkel):
     def __init__(
         self,
         payment_db_path: str,
+        db_key: str,
         table_name: str = "payments",
-        db_key: str | None = None,
     ):
         """
         Initialize the Transaction object.
@@ -66,16 +66,18 @@ class Transaction(MojoSkel):
     def _infer_columns_from_rows(self, rows: list[dict]):
         """
         Infer SQLite column types based on sample CSV data.
-
-        :param rows: Sample rows from CSV to analyze.
+        Column names are normalized using _normalize().
         """
         type_counters = defaultdict(Counter)
 
+        # Accumulate type guesses keyed by NORMALIZED names
         for row in rows:
             for key, value in row.items():
+                norm_key = self._normalize(key)
                 guessed_type = self._guess_type(value)
-                type_counters[key][guessed_type] += 1
+                type_counters[norm_key][guessed_type] += 1
 
+        # Decide final type for each normalized column
         self.columns = {}
         for col, counter in type_counters.items():
             if counter["TEXT"] == 0:
@@ -85,28 +87,37 @@ class Transaction(MojoSkel):
                     self.columns[col] = "INTEGER"
             else:
                 self.columns[col] = "TEXT"
-
         print("Inferred columns:", self.columns)
 
     def _create_full_tables(self, table: str, primary_col: str):
         """
         Create the table if it doesn't exist, using inferred schema.
-
-        :param table: Table name.
-        :param primary_col: Column to use as primary key, or None for default.
+        Column names are normalized for SQL-safe identifiers.
         """
-        col_names = list(self.columns.keys())
+
+        # Original CSV column names:
+        original_cols = list(self.columns.keys())
+
+        # Map original → normalized
+        norm_map = {c: self._normalize(c) for c in original_cols}
+
+        # Normalize primary key name
         if primary_col is None:
-            primary_col = col_names[0]
+            primary_col = original_cols[0]
         elif primary_col not in self.columns:
             raise ValueError(f"Primary key column '{primary_col}' not found in CSV.")
 
+        norm_pk = norm_map[primary_col]
+
+        # Build CREATE TABLE SQL using normalized names
         cols_def = ", ".join(
-            f'"{col}" {col_type}{" PRIMARY KEY" if col == primary_col else ""}'
-            for col, col_type in self.columns.items()
+            f'"{norm_map[col]}" {self.columns[col]}'
+            + (" PRIMARY KEY" if norm_map[col] == norm_pk else "")
+            for col in original_cols
         )
 
-        self.cursor.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({cols_def})')
+        sql = f'CREATE TABLE IF NOT EXISTS "{table}" ({cols_def})'
+        self.cursor.execute(sql)
         self.conn.commit()
 
     def _parse_row_values(self, row: dict, column_types: dict) -> tuple:

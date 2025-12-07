@@ -11,17 +11,9 @@ from pathlib import Path
 from typing import Union, List
 import re
 
-try:
-    from sqlcipher3 import dbapi2 as sqlite3
+from sqlcipher3 import dbapi2 as sqlite3
 
-    SQLCIPHER_AVAILABLE = True
-except ImportError:
-    import sqlite3
-
-    SQLCIPHER_AVAILABLE = False
-
-
-from .config import CSV_ENCODING  # import encoding from config.py
+from . import mojo_loader
 
 
 class MojoSkel:
@@ -30,7 +22,7 @@ class MojoSkel:
     for querying tables.
     """
 
-    def __init__(self, db_path: str, table_name: str, db_key: str):
+    def __init__(self, db_path: str, db_key: str, table_name: str):
         """
         Initialize the MojoSkel class.
 
@@ -52,118 +44,19 @@ class MojoSkel:
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
 
-        # Apply SQLCipher key if provided
-        if db_key:
-            self.cursor.execute(f"PRAGMA key='{db_key}'")
-            self.cursor.execute("PRAGMA cipher_compatibility = 4")
-            print(f"Encrypted database {self.db_path.name} loaded securely.")
+        # Apply SQLCipher key
+        self.cursor.execute(f"PRAGMA key='{db_key}'")
+        self.cursor.execute("PRAGMA cipher_compatibility = 4")
+        print("Cipher:", self.cursor.execute("PRAGMA cipher_version;").fetchone()[0])
+
+        if self.db_path == ":memory:":
+            db_name = self.db_path
         else:
-            if self.db_path == ":memory:":
-                db_name = self.db_path
-            else:
-                db_name = self.db_path.name
-            print(f"Unencrypted database {db_name} loaded.")
+            db_name = self.db_path.name
+        print(f"Encrypted database {db_name} loaded securely.")
 
-    def import_csv_into_encrypted_db(self, csv_path: Path, pk_column: str = None):
-        """Import CSV into an encrypted SQLCipher database using sqlcipher3."""
-        if not csv_path.exists():
-            raise FileNotFoundError(f"CSV file not found: {csv_path}")
-
-        count_before = self.count()
-
-        # Drop existing table
-        self.cursor.execute(f'DROP TABLE IF EXISTS "{self.table_name}";')
-
-        # Create table
-        create_sql = self._create_table_sql_from_csv(
-            csv_path, self.table_name, pk_column
-        )
-        self.cursor.execute(create_sql)
-
-        with csv_path.open(newline="", encoding=CSV_ENCODING) as f:
-            reader = DictReader(f)
-            cols = reader.fieldnames
-
-            # Normalise mapping
-            norm_map = {c: self._normalize(c) for c in cols}
-
-            # Build INSERT
-            colnames = ",".join(f'"{norm_map[c]}"' for c in cols)
-            placeholders = ",".join("?" for _ in cols)
-
-            insert_sql = (
-                f'INSERT INTO "{self.table_name}" ({colnames}) VALUES ({placeholders})'
-            )
-
-            # Insert rows
-            for row in reader:
-                self.cursor.execute(insert_sql, [row[c] for c in cols])
-
-        print(f"Inserted {self.count() - count_before} new rows.")
-
-    def _get_column_type_map(self):
-        """Return a mapping of column names to their SQL types."""
-        return {
-            # Integer columns
-            "member_number": "INTEGER",
-            "membermojo_id": "INTEGER",
-            # Real/Float columns
-            "cost": "REAL",
-            "paid": "REAL",
-            # All other columns default to TEXT
-        }
-
-    def _normalize(self, name: str) -> str:
-        """Normalize a column name: lowercase, remove symbols, convert to snake case."""
-        name = name.strip().lower()
-        name = re.sub(r"[^a-z0-9]+", "_", name)
-        return name.strip("_")
-
-    def _create_table_from_columns(
-        self,
-        table_name: str,
-        columns: list[str],
-        primary_col: str,
-    ) -> str:
-        """Generate CREATE TABLE SQL with proper types for given columns."""
-        type_map = self._get_column_type_map()
-
-        # Default primary key = first column if not provided
-        if primary_col:
-            primary_col = self._normalize(primary_col)
-
-        column_defs = []
-        for col in columns:
-            norm_col = self._normalize(col)
-            col_type = type_map.get(norm_col, "TEXT")  # Default to TEXT
-
-            # Add PRIMARY KEY if this is the chosen column
-            if norm_col == primary_col:
-                column_defs.append(f'    "{norm_col}" {col_type} PRIMARY KEY')
-            else:
-                column_defs.append(f'    "{norm_col}" {col_type}')
-
-        return (
-            f'CREATE TABLE IF NOT EXISTS "{table_name}" (\n'
-            + ",\n".join(column_defs)
-            + "\n)"
-        )
-
-    def _create_table_sql_from_csv(
-        self, csv_path: Path, table_name: str, pk_column: str
-    ) -> str:
-        """
-        Generate CREATE TABLE SQL dynamically from the CSV header
-        using csv.DictReader. All columns are TEXT.
-        """
-        with csv_path.open("r", encoding="utf-8", newline="") as f:
-            reader = DictReader(f)
-            columns = reader.fieldnames
-
-        if not columns:
-            raise ValueError(f"CSV file '{csv_path}' has no header row.")
-
-        return self._create_table_from_columns(table_name, columns, pk_column)
+    def import_csv(self, csv_path: Path):
+        mojo_loader.import_csv_into_encrypted_db(csv_path)
 
     def show_table(self, limit: int = 2):
         """
@@ -184,14 +77,13 @@ class MojoSkel:
     def count(self) -> int:
         """
         Returns count of the number of rows in the table.
-        Safe: returns 0 if the table doesn't exist or the DB is unreadable.
+        Safe: returns 0 if the table doesn't exist.
         """
-        try:
+        if self.table_exists(self.table_name):
             self.cursor.execute(f'SELECT COUNT(*) FROM "{self.table_name}"')
             result = self.cursor.fetchone()
             return result[0] if result else 0
-        except (sqlite3.OperationalError, sqlite3.DatabaseError, AttributeError):
-            # Table missing, DB unreadable (e.g. encrypted file), or cursor not set
+        else:
             return 0
 
     def get_row(self, entry_name: str, entry_value: str) -> dict:
@@ -252,3 +144,10 @@ class MojoSkel:
         # Return *all* rows
         self.cursor.execute(base_query, values)
         return self.cursor.fetchall()
+
+    def table_exists(self, table_name: str) -> bool:
+        self.cursor.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1;",
+            (table_name,),
+        )
+        return self.cursor.fetchone() is not None

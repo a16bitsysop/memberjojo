@@ -51,8 +51,8 @@ class Member(MojoSkel):
     def __init__(
         self,
         member_db_path: Path,
+        db_key: str,
         table_name: str = "members",
-        db_key: str | None = None,
     ):
         """
         Initialize the Member database handler.
