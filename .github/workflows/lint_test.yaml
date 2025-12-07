@@ -31,11 +31,6 @@ jobs:
       - name: 🧹 Run pylint
         run: pylint .
 
-      - name: 🧪 Run pytest without sqlcipher
-        run: |
-          coverage run -m pytest
-          coverage report -m
-
       - name: 🛠️ Install  sqlcipher and sqlcipher3
         run: |
           sudo apt-get --no-install-recommends --no-install-suggests install libsqlcipher-dev
