@@ -3,7 +3,7 @@ Iteration tests for the Member class
 """
 
 import csv
-from memberjojo import Member, MemberData
+from memberjojo import Member
 
 
 def test_member_iter(tmp_path):
@@ -41,7 +41,7 @@ def test_member_iter(tmp_path):
     db_path = tmp_path / "test_members.db"
 
     # Instantiate Member and import CSV
-    members = Member(db_path)
+    members = Member(db_path, "Needs a Password")
     members.import_csv(sample_csv)
 
     # Collect members from iterator
@@ -52,7 +52,7 @@ def test_member_iter(tmp_path):
 
     # Check that fields match for first member
     first = iterated_members[0]
-    assert isinstance(first, MemberData)
+    assert isinstance(first, members.row_class)
     assert first.member_number == int(sample_data[0]["Member number"])
     assert first.title == sample_data[0]["Title"]
     assert first.first_name == sample_data[0]["First name"]

@@ -5,11 +5,12 @@ This module provides a common base class (`MojoSkel`) for other `memberjojo` mod
 It includes helper methods for working with SQLite databases.
 """
 
-from csv import DictReader
-from decimal import Decimal
+# pylint: disable=no-member
+
+from dataclasses import make_dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Union, List
-import re
 
 from sqlcipher3 import dbapi2 as sqlite3
 
@@ -55,8 +56,80 @@ class MojoSkel:
             db_name = self.db_path.name
         print(f"Encrypted database {db_name} loaded securely.")
 
+        # After table exists (or after import), build the dataclass
+        if self.table_exists(table_name):
+            self.row_class = self._build_dataclass_from_table()
+        else:
+            self.row_class = None
+
+    def __iter__(self):
+        if not self.row_class:
+            raise RuntimeError("Table not loaded yet — no dataclass available")
+        return self._iter_rows()
+
+    def _iter_rows(self, limit: int | None = None):
+        """
+        Iterate over table rows and yield dynamically-created dataclass objects.
+        Converts REAL columns to Decimal automatically.
+        """
+
+        sql = f'SELECT * FROM "{self.table_name}"'
+        if limit:
+            sql += f" LIMIT {limit}"
+
+        cur = self.conn.cursor()
+        cur.execute(sql)
+
+        for row in cur.fetchall():
+            row_dict = dict(row)
+
+            # Convert REAL → Decimal
+            for k, v in row_dict.items():
+                if isinstance(v, float):
+                    row_dict[k] = Decimal(str(v))
+                elif isinstance(v, str):
+                    # Try converting numeric strings
+                    try:
+                        row_dict[k] = Decimal(v)
+                    except InvalidOperation:
+                        pass
+
+            yield self.row_class(**row_dict)
+
+    def _build_dataclass_from_table(self):
+        """
+        Dynamically create a dataclass from the table schema.
+        INTEGER → int
+        REAL → Decimal
+        TEXT → str
+        """
+        self.cursor.execute(f'PRAGMA table_info("{self.table_name}")')
+        cols = self.cursor.fetchall()
+
+        if not cols:
+            raise ValueError(f"Table '{self.table_name}' does not exist")
+
+        fields = []
+        for _cid, name, col_type, _notnull, _dflt, _pk in cols:
+            t = col_type.upper()
+
+            if t.startswith("INT"):
+                py_type = int
+            elif t.startswith("REAL") or t.startswith("NUM") or t.startswith("DEC"):
+                py_type = Decimal
+            else:
+                py_type = str
+
+            fields.append((name, py_type))
+
+        return make_dataclass(f"{self.table_name}_Row", fields)
+
     def import_csv(self, csv_path: Path):
-        mojo_loader.import_csv_into_encrypted_db(csv_path)
+        """
+        import the passed CSV into the sqlite database
+        """
+        mojo_loader.import_csv_helper(self.conn, self.table_name, csv_path)
+        self.row_class = self._build_dataclass_from_table()
 
     def show_table(self, limit: int = 2):
         """
@@ -64,10 +137,11 @@ class MojoSkel:
 
         :param limit: (optional) Number of rows to display. Defaults to 2.
         """
-        self.cursor.execute(f'SELECT * FROM "{self.table_name}" LIMIT ?', (limit,))
-        rows = self.cursor.fetchall()
+        if self.table_exists(self.table_name):
+            self.cursor.execute(f'SELECT * FROM "{self.table_name}" LIMIT ?', (limit,))
+            rows = self.cursor.fetchall()
 
-        if not rows:
+        else:
             print("(No data)")
             return
 
@@ -83,8 +157,8 @@ class MojoSkel:
             self.cursor.execute(f'SELECT COUNT(*) FROM "{self.table_name}"')
             result = self.cursor.fetchone()
             return result[0] if result else 0
-        else:
-            return 0
+
+        return 0
 
     def get_row(self, entry_name: str, entry_value: str) -> dict:
         """
@@ -146,6 +220,9 @@ class MojoSkel:
         return self.cursor.fetchall()
 
     def table_exists(self, table_name: str) -> bool:
+        """
+        Return true or false if a table exists
+        """
         self.cursor.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1;",
             (table_name,),
