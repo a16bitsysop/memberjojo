@@ -129,3 +129,11 @@ def test_get_row_multi(payment_db):
     # No match
     row = payment_db.get_row_multi({"id": "3", "desc": "Not a match"})
     assert row is None
+
+
+def test_get_row(payment_db):
+    """
+    Test single row
+    """
+    row = payment_db.get_row("id", "5")
+    assert row["id"] == 5
