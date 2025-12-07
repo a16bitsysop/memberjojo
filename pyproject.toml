@@ -14,7 +14,7 @@ requires-python = ">=3.8"
 [project.urls]
 Home = "https://github.com/a16bitsysop/memberjojo"
 
-[project.optional-dependencies]
+[project.dependencies]
 sqlcipher = [
     "sqlcipher3"
 ]
