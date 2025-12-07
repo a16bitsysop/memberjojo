@@ -22,10 +22,9 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: 🛠️ Install  sqlcipher and sqlcipher3
+      - name: 🛠️ Install  libsqlcipher for sqlcipher3
         run: |
           sudo apt-get --no-install-recommends --no-install-suggests install libsqlcipher-dev
-          pip install sqlcipher3
 
       - name: 🛠️ Install build deps
         run: pip install ".[dev,lint]"

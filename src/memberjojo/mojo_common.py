@@ -49,12 +49,7 @@ class MojoSkel:
         self.cursor.execute(f"PRAGMA key='{db_key}'")
         self.cursor.execute("PRAGMA cipher_compatibility = 4")
         print("Cipher:", self.cursor.execute("PRAGMA cipher_version;").fetchone()[0])
-
-        if self.db_path == ":memory:":
-            db_name = self.db_path
-        else:
-            db_name = self.db_path.name
-        print(f"Encrypted database {db_name} loaded securely.")
+        print(f"Encrypted database {self.db_path} loaded securely.")
 
         # After table exists (or after import), build the dataclass
         if self.table_exists(table_name):
@@ -67,15 +62,13 @@ class MojoSkel:
             raise RuntimeError("Table not loaded yet — no dataclass available")
         return self._iter_rows()
 
-    def _iter_rows(self, limit: int | None = None):
+    def _iter_rows(self):
         """
         Iterate over table rows and yield dynamically-created dataclass objects.
         Converts REAL columns to Decimal automatically.
         """
 
         sql = f'SELECT * FROM "{self.table_name}"'
-        if limit:
-            sql += f" LIMIT {limit}"
 
         cur = self.conn.cursor()
         cur.execute(sql)
