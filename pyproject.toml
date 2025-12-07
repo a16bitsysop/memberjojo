@@ -16,7 +16,7 @@ Home = "https://github.com/a16bitsysop/memberjojo"
 
 [project.dependencies]
 sqlcipher = [
-    "sqlcipher3"
+    "sqlcipher3",
 ]
 dev = [
     "coverage",
