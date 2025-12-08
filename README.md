@@ -25,8 +25,8 @@ brew install sqlcipher
 export C_INCLUDE_PATH="/opt/homebrew/opt/sqlcipher/include"
 export LIBRARY_PATH="/opt/homebrew/opt/sqlcipher/lib"
 pip install memberjojo
-
 ```
+
 Installing via `pip` on ubuntu:
 
 ```bash
