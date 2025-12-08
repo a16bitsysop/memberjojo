@@ -14,8 +14,6 @@ just import the latest download and the local database is updated.
 
 ## Installation
 
-Install via `pip`:
-
 Installing via `pip` on macos with `sqlcipher` installed via homebrew:\
 (The sqlcipher bindings are compiled by pip so the `C_INCLUDE_PATH` and
 `LIBRARY_PATH` are needed for the `libsqlcipher` files to be found)\
