@@ -8,5 +8,5 @@ except ModuleNotFoundError:
     # _version.py is written when building dist
     __version__ = "0.0.0+local"
 
-from .mojo_member import Member, MemberData
+from .mojo_member import Member
 from .mojo_transaction import Transaction

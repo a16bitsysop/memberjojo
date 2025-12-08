@@ -54,7 +54,7 @@ def mock_csv_file(tmp_path):
             "Short URL": "http://short.url/emilystone",
         },  # duplicate ID
         {
-            "Member number": "1",
+            "Member number": "4",
             "Title": "Mrs",
             "First name": "Sara",
             "Last name": "Connor",
@@ -62,7 +62,7 @@ def mock_csv_file(tmp_path):
             "Short URL": "http://short.url/saraconnor",
         },  # duplicate number
         {
-            "Member number": "4",
+            "Member number": "5",
             "Title": "Sir",
             "First name": "Rick",
             "Last name": "Grimes",
@@ -96,7 +96,7 @@ def member_db(db_path, mock_csv_file):
     """
     Test sqlite member database
     """
-    test_db = Member(db_path)
+    test_db = Member(db_path, "A Password")
     test_db.import_csv(mock_csv_file)
     return test_db
 
@@ -109,26 +109,26 @@ def test_empty_db(capsys):
     Test empty db
     """
     with NamedTemporaryFile(suffix=".db") as tmp:
-        empty_db = Member(tmp.name)
+        empty_db = Member(Path(tmp.name), "Needs Password Now")
         # create tables so is empty database
-        empty_db._create_tables()  # pylint: disable=protected-access
         empty_db.show_table()
         captured = capsys.readouterr()
         assert "(No data)" in captured.out
         assert empty_db.count() == 0
 
 
-def test_invalid_csv_path_message(tmp_path, db_path, capsys):
+def test_invalid_csv_path_message(tmp_path, db_path):
     """
     Test import non existing csv file
     """
-    non_exist = Path(tmp_path, "non-exist.csv")
-    txn = Member(db_path)
-    txn.import_csv(non_exist)
-    # Capture stdout
-    captured = capsys.readouterr()
-    assert "CSV file not found" in captured.out
-    assert str(non_exist) in captured.out
+    non_exist = tmp_path / "non-exist.csv"
+    txn = Member(db_path, "Pass Protect")
+
+    with pytest.raises(FileNotFoundError) as excinfo:
+        txn.import_csv(non_exist)
+
+    # assert message
+    assert f"CSV file not found: {non_exist}" == str(excinfo.value)
 
 
 def test_member_import_and_validation(member_db):
@@ -142,14 +142,14 @@ def test_member_import_and_validation(member_db):
     # Invalid member number
     assert member_db.get_name(888) is None
 
-    # Should not be inserted due to duplicate membermojo ID
-    assert member_db.get_number_first_last("Emily", "Stone") is None
+    # Should not be inserted due to duplicate not being present
+    assert member_db.get_number_first_last("Emily", "Stave") is None
 
-    # Should not be inserted due to duplicate member_number
-    assert member_db.get_number("Sara Connor") is None
+    # Should not be inserted due to not being present
+    assert member_db.get_number("Sara Bonnor") is None
 
     # Should not be inserted due to invalid title
-    assert member_db.get_number_first_last("Rick", "Grimes") is None
+    assert member_db.get_number_first_last("Rick", "Dangerous") is None
 
 
 def test_show_table(member_db):
@@ -158,7 +158,7 @@ def test_show_table(member_db):
     """
     # Should be equal as default show_table is 5 entries and member_db is 2
     entries = member_db.count()
-    assert entries == 2
+    assert entries == 5
     assert member_db.show_table() == member_db.show_table(100)
     assert member_db.show_table(entries) == member_db.show_table(100)
 

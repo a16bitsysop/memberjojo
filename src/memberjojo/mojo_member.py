@@ -5,35 +5,9 @@ This module loads data from a `members.csv` file downloaded from Membermojo,
 stores it in SQLite, and provides helper functions for member lookups.
 """
 
-from csv import DictReader
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-import sqlite3
-from .config import CSV_ENCODING  # import encoding from config.py
 from .mojo_common import MojoSkel
-
-
-@dataclass
-class MemberData:
-    """
-    A dataclass to represent a single member's data for database operations.
-
-    Attributes:
-        member_num (int): Unique member number (primary key).
-        title (str): Title (e.g., Mr, Mrs, Ms).
-        first_name (str): Member's first name.
-        last_name (str): Member's last name.
-        membermojo_id (int): Unique Membermojo ID.
-        short_url (str): Short URL to Membermojo profile.
-    """
-
-    member_num: int
-    title: str
-    first_name: str
-    last_name: str
-    membermojo_id: int
-    short_url: str
 
 
 class Member(MojoSkel):
@@ -45,53 +19,19 @@ class Member(MojoSkel):
 
     :param member_db_path (Path): Path to the SQLite database file.
     :param table_name (str): (optional) Table name to use. Defaults to "members".
+    :param db_key: (optional) key to unlock the encrypted sqlite database, unencrypted if unset.
     """
 
-    def __init__(self, member_db_path: Path, table_name: str = "members"):
+    def __init__(
+        self,
+        member_db_path: Path,
+        db_key: str,
+        table_name: str = "members",
+    ):
         """
         Initialize the Member database handler.
         """
-        super().__init__(member_db_path, table_name)
-
-    def __iter__(self):
-        """
-        Allow iterating over the class, by outputing all members.
-        """
-        sql = (
-            f"SELECT member_number, "
-            f"title, "
-            f"first_name, "
-            f"last_name, "
-            f"membermojo_id, "
-            f"short_url "
-            f'FROM "{self.table_name}"'
-        )
-        self.cursor.execute(sql)
-        rows = self.cursor.fetchall()
-        for row in rows:
-            yield MemberData(*row)
-
-    def _create_tables(self):
-        """
-        Create the members table in the database if it doesn't exist.
-
-        The table includes member number, title, first/last names,
-        Membermojo ID, and a short profile URL.
-        """
-        sql_statements = [
-            f"""CREATE TABLE IF NOT EXISTS "{self.table_name}" (
-                member_number INTEGER PRIMARY KEY,
-                title TEXT NOT NULL CHECK(title IN ('Dr', 'Mr', 'Mrs', 'Miss', 'Ms')),
-                first_name TEXT NOT NULL,
-                last_name TEXT NOT NULL,
-                membermojo_id INTEGER UNIQUE NOT NULL,
-                short_url TEXT NOT NULL
-            );"""
-        ]
-
-        for statement in sql_statements:
-            self.cursor.execute(statement)
-        self.conn.commit()
+        super().__init__(member_db_path, db_key, table_name)
 
     def get_number_first_last(
         self, first_name: str, last_name: str, found_error: bool = False
@@ -108,9 +48,9 @@ class Member(MojoSkel):
         :raises ValueError: If not found and `found_error` is True.
         """
         sql = f"""
-            SELECT member_number
+            SELECT "member_number"
             FROM "{self.table_name}"
-            WHERE LOWER(first_name) = LOWER(?) AND LOWER(last_name) = LOWER(?)
+            WHERE LOWER("first_name") = LOWER(?) AND LOWER("last_name") = LOWER(?)
         """
         self.cursor.execute(sql, (first_name, last_name))
         result = self.cursor.fetchone()
@@ -150,10 +90,10 @@ class Member(MojoSkel):
         :return: Name on membermojo or None
         """
         sql = f"""
-                SELECT first_name, last_name
+                SELECT "first_name", "last_name"
                 FROM "{self.table_name}"
-                WHERE LOWER(first_name) = LOWER(?)
-                    AND LOWER(last_name)  = LOWER(?)
+                WHERE LOWER("first_name") = LOWER(?)
+                    AND LOWER("last_name")  = LOWER(?)
         """
         self.cursor.execute(sql, (first_name, last_name))
         row = self.cursor.fetchone()
@@ -169,10 +109,10 @@ class Member(MojoSkel):
         :return: Name on membermojo or None
         """
         sql = f"""
-                SELECT first_name, last_name
+                SELECT "first_name", "last_name"
                 FROM "{self.table_name}"
-                WHERE LOWER(first_name) LIKE LOWER(?) || '%'
-                    AND LOWER(last_name) = LOWER(?)
+                WHERE LOWER("first_name") LIKE LOWER(?) || '%'
+                    AND LOWER("last_name") = LOWER(?)
                 LIMIT 1
         """
         self.cursor.execute(sql, (letter, last_name))
@@ -271,9 +211,9 @@ class Member(MojoSkel):
         :return: Full name as tuple, or None if not found.
         """
         sql = f"""
-            SELECT first_name, last_name
+            SELECT "first_name", "last_name"
             FROM "{self.table_name}"
-            WHERE member_number = ?
+            WHERE "member_number" = ?
             """
         self.cursor.execute(sql, (member_number,))
         result = self.cursor.fetchone()
@@ -295,61 +235,3 @@ class Member(MojoSkel):
             first_name, last_name = result
             return f"{first_name} {last_name}"
         return None
-
-    def _add(self, member: MemberData):
-        """
-        Insert a member into the database if not already present.
-
-        :param member: The member to add.
-        """
-        sql = f"""INSERT OR ABORT INTO "{self.table_name}"
-            (member_number, title, first_name, last_name, membermojo_id, short_url)
-            VALUES (?, ?, ?, ?, ?, ?)"""
-
-        try:
-            self.cursor.execute(
-                sql,
-                (
-                    member.member_num,
-                    member.title,
-                    member.first_name,
-                    member.last_name,
-                    member.membermojo_id,
-                    member.short_url,
-                ),
-            )
-            self.conn.commit()
-            print(
-                f"Created user {member.member_num}: {member.first_name} {member.last_name}"
-            )
-        except sqlite3.IntegrityError:
-            pass
-
-    def import_csv(self, csv_path: Path):
-        """
-        Load members from a Membermojo CSV file and insert into the database.
-
-        :param csv_path: Path to the CSV file.
-
-        Notes:
-            Only adds members not already in the database (INSERT OR ABORT).
-        """
-        print(f"Using SQLite database version {sqlite3.sqlite_version}")
-        self._create_tables()
-
-        try:
-            with csv_path.open(newline="", encoding=CSV_ENCODING) as csvfile:
-                mojo_reader = DictReader(csvfile)
-
-                for row in mojo_reader:
-                    member = MemberData(
-                        member_num=int(row["Member number"]),
-                        title=row["Title"].strip(),
-                        first_name=row["First name"].strip(),
-                        last_name=row["Last name"].strip(),
-                        membermojo_id=int(row["membermojo ID"]),
-                        short_url=row["Short URL"].strip(),
-                    )
-                    self._add(member)
-        except FileNotFoundError:
-            print(f"CSV file not found: {csv_path}")
