@@ -14,7 +14,13 @@ from collections import defaultdict, Counter
 
 
 def _normalize(name: str) -> str:
-    """Normalize a column name: lowercase, remove symbols, convert to snake case."""
+    """
+    Normalize a column name: lowercase, remove symbols, convert to snake case.
+
+    :param name: Raw name to normalize.
+
+    :return: Normalized lowercase string in snake case with no symbols.
+    """
     name = name.strip().lower()
     name = re.sub(r"[^a-z0-9]+", "_", name)
     return name.strip("_")
@@ -73,7 +79,11 @@ def infer_columns_from_rows(rows: list[dict]) -> dict[str, str]:
 def _create_table_from_columns(table_name: str, columns: dict[str, str]) -> str:
     """
     Generate CREATE TABLE SQL from column type mapping.
-    No primary key enforced.
+
+    :param table_name: Table to use when creating columns.
+    :param columns: dict of columns to create.
+
+    :return: SQL commands to create the table.
     """
     column_defs = [f'"{col}" {col_type}' for col, col_type in columns.items()]
     return (
@@ -92,6 +102,10 @@ def import_csv_helper(conn, table_name: str, csv_path: Path):
     """
     Import CSV into database using given cursor.
     Column types inferred automatically.
+
+    :param conn: SQLite database connection to use.
+    :param table_name: Table to import the CSV into.
+    :param csv_path: Path like path of the CSV file to import.
     """
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV file not found: {csv_path}")

@@ -1,5 +1,10 @@
-1.3:
-  * add support for sqlcipher to load encrypted db files, and import csv files encypted db files.
+2.0:
+  * add support for sqlcipher3 to load encrypted db files, and import CSV files into encrypted db files.
+  * use only one implemetation of csv_import which imports all data into an encrypted db, and creates
+    a dynamic dataclass of the table columns.
+  * import_csv now needs at least csv path and database key/password.
+  * Member and Transaction are now both iterable.
+  * move CSV import code into mojo_loader.py
 1.2: 22-11-2025
   * add get_mojo_name function to Member class with support for initals searching
     so name can be found without getting number first and then looking up name from number

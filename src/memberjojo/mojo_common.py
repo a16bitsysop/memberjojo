@@ -31,13 +31,11 @@ class MojoSkel:
         dictionary-style access to columns.
 
         :param db_path: Path to the SQLite database file.
+        :param db_key: key to unlock the encrypted sqlite database, or encrypt new one.
         :param table_name: Name of the table to operate on, or create when importing.
-        :param db_key: (optional) key to unlock the encrypted sqlite database, unencrypted if unset.
         """
         self.db_path = db_path
         self.table_name = table_name
-        self.columns = {}
-        self.conn = None
         self.db_key = db_key
 
         # Open connection
@@ -58,6 +56,9 @@ class MojoSkel:
             self.row_class = None
 
     def __iter__(self):
+        """
+        Allow iterating over the class, by outputing all members.
+        """
         if not self.row_class:
             raise RuntimeError("Table not loaded yet — no dataclass available")
         return self._iter_rows()
@@ -95,6 +96,8 @@ class MojoSkel:
         INTEGER → int
         REAL → Decimal
         TEXT → str
+
+        :return: A dataclass built from the table columns and types.
         """
         self.cursor.execute(f'PRAGMA table_info("{self.table_name}")')
         cols = self.cursor.fetchall()
@@ -120,6 +123,8 @@ class MojoSkel:
     def import_csv(self, csv_path: Path):
         """
         import the passed CSV into the sqlite database
+
+        :param csv_path: Path like path of csv file.
         """
         mojo_loader.import_csv_helper(self.conn, self.table_name, csv_path)
         self.row_class = self._build_dataclass_from_table()
@@ -143,8 +148,7 @@ class MojoSkel:
 
     def count(self) -> int:
         """
-        Returns count of the number of rows in the table.
-        Safe: returns 0 if the table doesn't exist.
+        :return: count of the number of rows in the table, or 0 if no table.
         """
         if self.table_exists(self.table_name):
             self.cursor.execute(f'SELECT COUNT(*) FROM "{self.table_name}"')
@@ -221,3 +225,4 @@ class MojoSkel:
             (table_name,),
         )
         return self.cursor.fetchone() is not None
+    
