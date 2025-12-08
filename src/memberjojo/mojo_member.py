@@ -124,11 +124,14 @@ class Member(MojoSkel):
     ) -> Optional[tuple]:
         """
         Resolve a member name from a free-text full name.
-        Search order:
-            1. first + last
-            2. middle + last (if three parts)
-            3. initial 1st letter + last
-            4. initial 2nd letter + last (for two-letter initials)
+
+        **Search order:**
+
+        1. first + last
+        2. middle + last (if three parts)
+        3. initial 1st letter + last
+        4. initial 2nd letter + last (for two-letter initials)
+
         Returns (first_name, last_name) or None.
 
         :param full_name: Full name of the member to find.
