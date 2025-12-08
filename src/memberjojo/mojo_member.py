@@ -125,7 +125,7 @@ class Member(MojoSkel):
         """
         Resolve a member name from a free-text full name.
 
-        **Search order:**
+        **Search order**
 
         1. first + last
         2. middle + last (if three parts)
