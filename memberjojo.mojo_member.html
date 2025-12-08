@@ -282,16 +282,14 @@ from CSV and performing queries like lookup by name or member number.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="memberjojo.mojo_member.Member.get_mojo_name">
 <span class="sig-name descname"><span class="pre">get_mojo_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">full_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">found_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#memberjojo.mojo_member.Member.get_mojo_name" title="Link to this definition">¶</a></dt>
-<dd><p>Resolve a member name from a free-text full name.
-Search order:</p>
-<blockquote>
-<div><ol class="arabic simple">
+<dd><p>Resolve a member name from a free-text full name.</p>
+<p><strong>Search order</strong></p>
+<ol class="arabic simple">
 <li><p>first + last</p></li>
 <li><p>middle + last (if three parts)</p></li>
 <li><p>initial 1st letter + last</p></li>
 <li><p>initial 2nd letter + last (for two-letter initials)</p></li>
 </ol>
-</div></blockquote>
 <p>Returns (first_name, last_name) or None.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
