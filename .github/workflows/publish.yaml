@@ -22,7 +22,7 @@ jobs:
         python-version: "3.x"
 
     - name: 🛠️ Install  libsqlcipher for sqlcipher3
-       run: sudo apt-get --no-install-recommends --no-install-suggests install libsqlcipher-dev
+      run: sudo apt-get --no-install-recommends --no-install-suggests install libsqlcipher-dev
 
     - name: 🛠️ Install pypa/build
       run: >-
