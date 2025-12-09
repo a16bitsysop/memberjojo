@@ -50,7 +50,7 @@ class MojoSkel:
         print(f"Encrypted database {self.db_path} loaded securely.")
 
         # After table exists (or after import), build the dataclass
-        if self.table_exists(table_name):
+        if self.table_exists():
             self.row_class = self._build_dataclass_from_table()
         else:
             self.row_class = None
@@ -123,11 +123,32 @@ class MojoSkel:
     def import_csv(self, csv_path: Path):
         """
         import the passed CSV into the sqlite database
+        and generate a diff is a previous database was loaded
 
         :param csv_path: Path like path of csv file.
         """
+        old_table = f"{self.table_name}_old"
+        had_existing = self.table_exists()
+        if had_existing:
+            # Rename existing table to <table>_old
+            self.conn.execute(f"ALTER TABLE {self.table_name} RENAME TO {old_table}")
+
+        # Load CSV
         mojo_loader.import_csv_helper(self.conn, self.table_name, csv_path)
         self.row_class = self._build_dataclass_from_table()
+
+        if had_existing:
+            # generate diff if there was already a database loaded
+            diff_result = mojo_loader.generate_sql_diff(
+                self.conn, new_table=self.table_name, old_table=old_table
+            )
+            if diff_result:
+                for r in diff_result:
+                    rowid, diff_type, *cols = r
+                    print(rowid, diff_type, cols)
+
+            # Drop old table
+            self.conn.execute(f"DROP TABLE {old_table}")
 
     def show_table(self, limit: int = 2):
         """
@@ -135,7 +156,7 @@ class MojoSkel:
 
         :param limit: (optional) Number of rows to display. Defaults to 2.
         """
-        if self.table_exists(self.table_name):
+        if self.table_exists():
             self.cursor.execute(f'SELECT * FROM "{self.table_name}" LIMIT ?', (limit,))
             rows = self.cursor.fetchall()
 
@@ -150,7 +171,7 @@ class MojoSkel:
         """
         :return: count of the number of rows in the table, or 0 if no table.
         """
-        if self.table_exists(self.table_name):
+        if self.table_exists():
             self.cursor.execute(f'SELECT COUNT(*) FROM "{self.table_name}"')
             result = self.cursor.fetchone()
             return result[0] if result else 0
@@ -216,12 +237,12 @@ class MojoSkel:
         self.cursor.execute(base_query, values)
         return self.cursor.fetchall()
 
-    def table_exists(self, table_name: str) -> bool:
+    def table_exists(self) -> bool:
         """
         Return true or false if a table exists
         """
         self.cursor.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1;",
-            (table_name,),
+            (self.table_name,),
         )
         return self.cursor.fetchone() is not None

@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 from collections import defaultdict, Counter
 
+from sqlcipher3 import dbapi2 as sqlite3
+
 # -----------------------
 # Normalization & Type Guessing
 # -----------------------
@@ -138,3 +140,60 @@ def import_csv_helper(conn, table_name: str, csv_path: Path):
 
     cursor.close()
     conn.commit()
+
+
+def generate_sql_diff(conn, new_table: str, old_table: str) -> list[sqlite3.Row]:
+    """
+    Returns a single SQL statement that produces a diff between
+    <new_table> and <old_table> using only SQLite features available in SQLCipher.
+
+    :param conn: SQLite database connection
+    :param new_table: the newly imported table name
+    :param old_table: the old table table to compare with
+
+    :return: SQL diff rows
+    """
+
+    # 1. Get columns
+    cur = conn.execute(f"PRAGMA table_info({new_table})")
+    cols = [row[1] for row in cur.fetchall()]
+
+    # 2. Select key column
+    key = "id" if "id" in cols else "rowid"
+
+    # 3. First 5 columns excluding key
+    first_cols = [c for c in cols if c != key][:5]
+
+    # Build SELECT column lists using the correct aliases
+    new_col_list = ", ".join(f"n.{c}" for c in first_cols) if first_cols else ""
+    old_col_list = ", ".join(f"o.{c}" for c in first_cols) if first_cols else ""
+
+    # 4. Build comparisons for changed rows
+    comparisons = " OR ".join([f"(n.{c} IS NOT o.{c})" for c in cols])
+
+    sql = f"""
+    WITH
+        added AS (
+            SELECT n.{key} AS k, 'added' AS diff_type{', ' + new_col_list if new_col_list else ''}
+            FROM {new_table} n
+            LEFT JOIN {old_table} o ON n.{key} = o.{key}
+            WHERE o.{key} IS NULL
+        ),
+        deleted AS (
+            SELECT o.{key} AS k, 'deleted' AS diff_type{', ' + old_col_list if old_col_list else ''}
+            FROM {old_table} o
+            LEFT JOIN {new_table} n ON n.{key} = o.{key}
+            WHERE n.{key} IS NULL
+        ),
+        changed AS (
+            SELECT n.{key} AS k, 'changed' AS diff_type{', ' + new_col_list if new_col_list else ''}
+            FROM {new_table} n
+            JOIN {old_table} o ON n.{key} = o.{key}
+            WHERE {comparisons}
+        )
+    SELECT * FROM added
+    UNION ALL SELECT * FROM deleted
+    UNION ALL SELECT * FROM changed
+    ORDER BY k;
+    """
+    return list(conn.execute(sql))
