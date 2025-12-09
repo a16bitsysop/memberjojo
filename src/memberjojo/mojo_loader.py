@@ -154,42 +154,46 @@ def generate_sql_diff(conn, new_table: str, old_table: str) -> list[sqlite3.Row]
     :return: SQL diff rows
     """
 
-    # Get columns from PRAGMA
+    # 1. Get columns
     cur = conn.execute(f"PRAGMA table_info({new_table})")
-    cols = [row[1] for row in cur.fetchall()]  # column name is index 1
+    cols = [row[1] for row in cur.fetchall()]
 
-    # Build column comparison: (n.col IS NOT o.col)
+    # 2. Select key column
+    key = "id" if "id" in cols else "rowid"
+
+    # 3. First 5 columns excluding key
+    first_cols = [c for c in cols if c != key][:5]
+
+    # Build SELECT column lists using the correct aliases
+    new_col_list = ", ".join(f"n.{c}" for c in first_cols) if first_cols else ""
+    old_col_list = ", ".join(f"o.{c}" for c in first_cols) if first_cols else ""
+
+    # 4. Build comparisons for changed rows
     comparisons = " OR ".join([f"(n.{c} IS NOT o.{c})" for c in cols])
 
     sql = f"""
-WITH
-    new_ids AS (SELECT rowid FROM {new_table}),
-    old_ids AS (SELECT rowid FROM {old_table}),
-
-    added AS (
-        SELECT n.rowid AS rowid, 'added' AS diff_type
-        FROM new_ids n
-        LEFT JOIN old_ids o USING(rowid)
-        WHERE o.rowid IS NULL
-    ),
-
-    deleted AS (
-        SELECT o.rowid AS rowid, 'deleted' AS diff_type
-        FROM old_ids o
-        LEFT JOIN new_ids n USING(rowid)
-        WHERE n.rowid IS NULL
-    ),
-
-    changed AS (
-        SELECT n.rowid AS rowid, 'changed' AS diff_type
-        FROM {new_table} n
-        JOIN {old_table} o USING(rowid)
-        WHERE {comparisons}
-    )
-
-SELECT * FROM added
-UNION ALL SELECT * FROM deleted
-UNION ALL SELECT * FROM changed
-ORDER BY rowid;
-"""
+    WITH
+        added AS (
+            SELECT n.{key} AS k, 'added' AS diff_type{', ' + new_col_list if new_col_list else ''}
+            FROM {new_table} n
+            LEFT JOIN {old_table} o ON n.{key} = o.{key}
+            WHERE o.{key} IS NULL
+        ),
+        deleted AS (
+            SELECT o.{key} AS k, 'deleted' AS diff_type{', ' + old_col_list if old_col_list else ''}
+            FROM {old_table} o
+            LEFT JOIN {new_table} n ON n.{key} = o.{key}
+            WHERE n.{key} IS NULL
+        ),
+        changed AS (
+            SELECT n.{key} AS k, 'changed' AS diff_type{', ' + new_col_list if new_col_list else ''}
+            FROM {new_table} n
+            JOIN {old_table} o ON n.{key} = o.{key}
+            WHERE {comparisons}
+        )
+    SELECT * FROM added
+    UNION ALL SELECT * FROM deleted
+    UNION ALL SELECT * FROM changed
+    ORDER BY k;
+    """
     return list(conn.execute(sql))
