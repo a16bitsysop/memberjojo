@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 from collections import defaultdict, Counter
 
+from sqlcipher3 import dbapi2 as sqlite3
+
 # -----------------------
 # Normalization & Type Guessing
 # -----------------------
@@ -138,3 +140,56 @@ def import_csv_helper(conn, table_name: str, csv_path: Path):
 
     cursor.close()
     conn.commit()
+
+
+def generate_sql_diff(conn, new_table: str, old_table: str) -> list[sqlite3.Row]:
+    """
+    Returns a single SQL statement that produces a diff between
+    <new_table> and <old_table> using only SQLite features available in SQLCipher.
+
+    :param conn: SQLite database connection
+    :param new_table: the newly imported table name
+    :param old_table: the old table table to compare with
+
+    :return: SQL diff rows
+    """
+
+    # Get columns from PRAGMA
+    cur = conn.execute(f"PRAGMA table_info({new_table})")
+    cols = [row[1] for row in cur.fetchall()]  # column name is index 1
+
+    # Build column comparison: (n.col IS NOT o.col)
+    comparisons = " OR ".join([f"(n.{c} IS NOT o.{c})" for c in cols])
+
+    sql = f"""
+WITH
+    new_ids AS (SELECT rowid FROM {new_table}),
+    old_ids AS (SELECT rowid FROM {old_table}),
+
+    added AS (
+        SELECT n.rowid AS rowid, 'added' AS diff_type
+        FROM new_ids n
+        LEFT JOIN old_ids o USING(rowid)
+        WHERE o.rowid IS NULL
+    ),
+
+    deleted AS (
+        SELECT o.rowid AS rowid, 'deleted' AS diff_type
+        FROM old_ids o
+        LEFT JOIN new_ids n USING(rowid)
+        WHERE n.rowid IS NULL
+    ),
+
+    changed AS (
+        SELECT n.rowid AS rowid, 'changed' AS diff_type
+        FROM {new_table} n
+        JOIN {old_table} o USING(rowid)
+        WHERE {comparisons}
+    )
+
+SELECT * FROM added
+UNION ALL SELECT * FROM deleted
+UNION ALL SELECT * FROM changed
+ORDER BY rowid;
+"""
+    return list(conn.execute(sql))
