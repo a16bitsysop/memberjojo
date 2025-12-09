@@ -3,6 +3,7 @@ Iteration tests for the Member class
 """
 
 import csv
+import pytest
 from memberjojo import Member
 
 
@@ -67,6 +68,20 @@ def test_member_iter(tmp_path):
     second = iterated_members[1]
     assert second.first_name == SAMPLE_MEMBERS[1]["First name"]
     assert second.last_name == SAMPLE_MEMBERS[1]["Last name"]
+
+
+def test_iter_without_loading(tmp_path):
+    """
+    Iterating a MojoSkel instance without loading a table
+    should raise RuntimeError.
+    """
+    db_path = tmp_path / "test.db"
+    m = Member(str(db_path), "dummy_password", "members")
+
+    with pytest.raises(RuntimeError, match="Table not loaded yet"):
+        # Attempting iteration without loading CSV
+        for _ in m:
+            pass
 
 
 def test_member_import_persist_and_reload(tmp_path):
