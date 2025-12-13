@@ -87,11 +87,18 @@ def _create_table_from_columns(table_name: str, columns: dict[str, str]) -> str:
 
     :return: SQL commands to create the table.
     """
-    column_defs = [f'"{col}" {col_type}' for col, col_type in columns.items()]
+    col_defs = []
+    first = True
+
+    for col, col_type in columns.items():
+        if first:
+            col_defs.append(f'"{col}" {col_type} PRIMARY KEY')
+            first = False
+        else:
+            col_defs.append(f'"{col}" {col_type}')
+
     return (
-        f'CREATE TABLE IF NOT EXISTS "{table_name}" (\n'
-        + ",\n".join(column_defs)
-        + "\n)"
+        f'CREATE TABLE IF NOT EXISTS "{table_name}" (\n' + ",\n".join(col_defs) + "\n)"
     )
 
 
@@ -154,22 +161,46 @@ def generate_sql_diff(conn, new_table: str, old_table: str) -> list[sqlite3.Row]
     :return: SQL diff rows
     """
 
-    # 1. Get columns
+    # 1. Get columns (preserve the schema order)
     cur = conn.execute(f"PRAGMA table_info({new_table})")
-    cols = [row[1] for row in cur.fetchall()]
+    cols_info = cur.fetchall()
+    cols = [row[1] for row in cols_info]  # column names
 
-    # 2. Select key column
-    key = "id" if "id" in cols else "rowid"
+    if not cols:
+        raise RuntimeError(f"Table {new_table!r} has no columns")
 
-    # 3. First 5 columns excluding key
-    first_cols = [c for c in cols if c != key][:5]
+    # 2. Detect primary key column from PRAGMA (pk field at index 5)
+    pk_col = next((row[1] for row in cols_info if row[5] == 1), None)
+    # Fallback: use 'id' if present, else use the first column
+    if pk_col is None:
+        if "id" in cols:
+            pk_col = "id"
+        else:
+            pk_col = cols[0]
 
-    # Build SELECT column lists using the correct aliases
-    new_col_list = ", ".join(f"n.{c}" for c in first_cols) if first_cols else ""
-    old_col_list = ", ".join(f"o.{c}" for c in first_cols) if first_cols else ""
+    key = pk_col
 
-    # 4. Build comparisons for changed rows
-    comparisons = " OR ".join([f"(n.{c} IS NOT o.{c})" for c in cols])
+    # 3. First few preview columns (excluding the key), but ensure key appears in preview
+    preview_cols = [c for c in cols if c != key][:5]
+    # Guarantee the primary key is included at the LEFT of the preview (not duplicated)
+    # We'll select the key separately as "k" and also include it in preview for readability.
+    preview_cols_for_select = [key] + [c for c in preview_cols if c != key]
+
+    new_col_list = (
+        ", ".join(f"n.{c}" for c in preview_cols_for_select)
+        if preview_cols_for_select
+        else ""
+    )
+    old_col_list = (
+        ", ".join(f"o.{c}" for c in preview_cols_for_select)
+        if preview_cols_for_select
+        else ""
+    )
+
+    # 4. NULL-safe comparisons for all columns
+    comparisons = " OR ".join(
+        [f"NOT ((n.{c} = o.{c}) OR (n.{c} IS NULL AND o.{c} IS NULL))" for c in cols]
+    )
 
     sql = f"""
     WITH

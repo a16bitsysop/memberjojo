@@ -145,7 +145,7 @@ class MojoSkel:
             if diff_result:
                 for r in diff_result:
                     rowid, diff_type, *cols = r
-                    print(rowid, diff_type, cols)
+                    print(diff_type, cols)
 
             # Drop old table
             self.conn.execute(f"DROP TABLE {old_table}")
