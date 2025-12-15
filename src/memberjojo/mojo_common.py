@@ -122,32 +122,41 @@ class MojoSkel:
 
     def import_csv(self, csv_path: Path):
         """
-        import the passed CSV into the sqlite database
-        and generate a diff is a previous database was loaded
+        Import the passed CSV into the encrypted sqlite database.
+        If a previous table exists, generate a diff using
+        mojo_loader.diff_cipher_tables().
 
         :param csv_path: Path like path of csv file.
         """
         old_table = f"{self.table_name}_old"
         had_existing = self.table_exists()
+
+        # 1. Preserve existing table
         if had_existing:
-            # Rename existing table to <table>_old
             self.conn.execute(f"ALTER TABLE {self.table_name} RENAME TO {old_table}")
 
-        # Load CSV
+        # 2. Import CSV as new table
         mojo_loader.import_csv_helper(self.conn, self.table_name, csv_path)
         self.row_class = self._build_dataclass_from_table()
 
-        if had_existing:
-            # generate diff if there was already a database loaded
-            diff_result = mojo_loader.generate_sql_diff(
-                self.conn, new_table=self.table_name, old_table=old_table
-            )
-            if diff_result:
-                for r in diff_result:
-                    rowid, diff_type, *cols = r
-                    print(diff_type, cols)
+        if not had_existing:
+            return
 
-            # Drop old table
+        try:
+            # 3. Diff old vs new (SQLCipher → sqlite3 → dataclasses)
+            diff_rows = mojo_loader.diff_cipher_tables(
+                self.conn,
+                new_table=self.table_name,
+                old_table=old_table,
+            )
+
+            if diff_rows:
+                for diff in diff_rows:
+                    # diff is a DiffRow dataclass
+                    print(diff.diff_type, diff.preview)
+
+        finally:
+            # 4. Cleanup old table (always)
             self.conn.execute(f"DROP TABLE {old_table}")
 
     def show_table(self, limit: int = 2):
