@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="prev" title="Member class" href="memberjojo.mojo_member.html">
 
     <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
-        <title>Transaction Class - memberjojo 2.1 documentation</title>
+        <title>Transaction Class - memberjojo 2.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=580074bf" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -161,7 +161,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="index.html"><div class="brand">memberjojo 2.1 documentation</div></a>
+      <a href="index.html"><div class="brand">memberjojo 2.2 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -182,7 +182,7 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
   
-  <span class="sidebar-brand-text">memberjojo 2.1 documentation</span>
+  <span class="sidebar-brand-text">memberjojo 2.2 documentation</span>
   
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -312,7 +312,9 @@ If False, return a list of all matching rows.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="memberjojo.mojo_transaction.Transaction.import_csv">
 <span class="sig-name descname"><span class="pre">import_csv</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">csv_path</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#memberjojo.mojo_transaction.Transaction.import_csv" title="Link to this definition">¶</a></dt>
-<dd><p>import the passed CSV into the sqlite database</p>
+<dd><p>Import the passed CSV into the encrypted sqlite database.
+If a previous table exists, generate a diff using
+mojo_loader.diff_cipher_tables().</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>csv_path</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">Path</span></code></span>) – Path like path of csv file.</p>
@@ -333,7 +335,7 @@ If False, return a list of all matching rows.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="memberjojo.mojo_transaction.Transaction.table_exists">
-<span class="sig-name descname"><span class="pre">table_exists</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#memberjojo.mojo_transaction.Transaction.table_exists" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">table_exists</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#memberjojo.mojo_transaction.Transaction.table_exists" title="Link to this definition">¶</a></dt>
 <dd><p>Return true or false if a table exists</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
@@ -414,7 +416,7 @@ If False, return a list of all matching rows.</p></li>
       
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=c4a36953"></script>
+</div><script src="_static/documentation_options.js?v=f35be339"></script>
     <script src="_static/doctools.js?v=9bcbadda"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>
