@@ -1,3 +1,7 @@
+2.2:
+  * add printing a diff when importing a CSV to give a summary of changes
+2.1:
+  * fix documentation building
 2.0:
   * add support for sqlcipher3 to load encrypted db files, and import CSV files into encrypted db files.
   * use only one implemetation of csv_import which imports all data into an encrypted db, and creates
