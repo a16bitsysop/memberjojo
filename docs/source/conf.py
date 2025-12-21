@@ -5,9 +5,9 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 import os
 import sys
-import memberjojo
 
 sys.path.insert(0, os.path.abspath("../../src"))  # so Sphinx can find the module
+import memberjojo
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
