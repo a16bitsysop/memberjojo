@@ -5,6 +5,7 @@ This module loads data from a `members.csv` file downloaded from Membermojo,
 stores it in SQLite, and provides helper functions for member lookups.
 """
 
+from difflib import get_close_matches
 from pathlib import Path
 from typing import Optional
 from .mojo_common import MojoSkel
@@ -32,6 +33,33 @@ class Member(MojoSkel):
         Initialize the Member database handler.
         """
         super().__init__(member_db_path, db_key, table_name)
+
+    def get_bool(self, entry_name: str, member_number: int) -> bool:
+        """
+        Return a bool for a member entry that is a tick box on membermojo
+
+        :param entry_name: The entry name to return as a bool
+        :param member_number: The member number to check value of entry_name
+
+        :return: True is entry is yes otherwise false
+
+        :raises ValueError: If entry name not found.
+        """
+        sql = f"""
+            SELECT "{entry_name}"
+            FROM "{self.table_name}"
+            WHERE "member_number" = ?
+        """
+        self.cursor.execute(sql, (member_number,))
+
+        row = self.cursor.fetchone()
+        if row is None:
+            raise ValueError(
+                f"❌ Cannot find: {entry_name} for member {member_number}."
+            )
+
+        value = row[0]
+        return str(value).lower() == "yes"
 
     def get_number_first_last(
         self, first_name: str, last_name: str, found_error: bool = False
@@ -75,7 +103,10 @@ class Member(MojoSkel):
 
         :raises ValueError: If not found and `found_error` is True.
         """
-        result = self.get_mojo_name(full_name, found_error)
+        result = self.get_mojo_name(full_name, False)
+        if not result:
+            result = self.get_fuzz_name(full_name, found_error)
+
         if result:
             return self.get_number_first_last(result[0], result[1])
         return None
@@ -238,3 +269,41 @@ class Member(MojoSkel):
             first_name, last_name = result
             return f"{first_name} {last_name}"
         return None
+
+    def get_fuzz_name(self, name: str, found_error: bool = False):
+        """
+        Fuzzy search for members by name using partial matching.
+        Searches across first_name and last_name fields.
+
+        :param name: Free text name to search for (partial match).
+        :param only_one: If True (default), return the first matching row.
+                        If False, return a list of all matching rows.
+
+        :return:
+            - If only_one=True → a single tuple of (first_name, last_name) or None
+
+        :raises ValueError: If not found and `found_error` is True.
+        """
+
+        name = name.strip().lower()
+
+        # Get all members
+        self.cursor.execute(
+            f'SELECT *, LOWER(first_name || " " || last_name) AS full FROM "{self.table_name}"'
+        )
+        rows = self.cursor.fetchall()
+
+        choices = [row["full"] for row in rows]
+        matches = get_close_matches(name, choices, n=1, cutoff=0.6)
+
+        if not matches:
+            if found_error:
+                raise ValueError(
+                    f"❌ Cannot find {name} in member database with fuzzy match."
+                )
+            return None
+
+        match = matches[0]
+        # return the sqlite row for the best match
+        row = next(r for r in rows if r["full"] == match)
+        return (row["first_name"], row["last_name"])
