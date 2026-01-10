@@ -132,12 +132,14 @@ def test_get_row_multi_extended(payment_db):
 
     # Test with tuple range for amount (between 150 and 300)
     rows = payment_db.get_row_multi({"amount": (150, 300)}, only_one=False)
-    assert len(rows) == 3 # id=2 (200), id=3 (150), id=4 (175)
+    assert len(rows) == 3  # id=2 (200), id=3 (150), id=4 (175)
     assert {row.id for row in rows} == {2, 3, 4}
 
     # Test for getting multiple rows (amount > 100)
-    rows = payment_db.get_row_multi({"amount": (100, None)}, only_one=False) # None for upper bound
-    assert len(rows) == 5 # All rows
+    rows = payment_db.get_row_multi(
+        {"amount": (100, None)}, only_one=False
+    )  # None for upper bound
+    assert len(rows) == 5  # All rows
     assert {row.id for row in rows} == {1, 2, 3, 4, 5}
 
 
