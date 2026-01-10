@@ -5,8 +5,6 @@ This module provides a common base class (`MojoSkel`) for other `memberjojo` mod
 It includes helper methods for working with SQLite databases.
 """
 
-# pylint: disable=no-member
-
 from dataclasses import make_dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -39,8 +37,8 @@ class MojoSkel:
         self.db_key = db_key
 
         # Open connection
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.row_factory = sqlite3.Row
+        self.conn = sqlite3.connect(self.db_path)  # pylint: disable=no-member
+        self.conn.row_factory = sqlite3.Row  # pylint: disable=no-member
         self.cursor = self.conn.cursor()
 
         # Apply SQLCipher key
@@ -63,6 +61,21 @@ class MojoSkel:
             raise RuntimeError("Table not loaded yet — no dataclass available")
         return self._iter_rows()
 
+    def _row_to_obj(self, row):
+        row_dict = dict(row)
+
+        # Convert REAL → Decimal (including numeric strings)
+        for k, v in row_dict.items():
+            if isinstance(v, float):
+                row_dict[k] = Decimal(str(v))
+            elif isinstance(v, str):
+                try:
+                    row_dict[k] = Decimal(v)
+                except InvalidOperation:
+                    pass
+
+        return self.row_class(**row_dict)
+
     def _iter_rows(self):
         """
         Iterate over table rows and yield dynamically-created dataclass objects.
@@ -75,20 +88,7 @@ class MojoSkel:
         cur.execute(sql)
 
         for row in cur.fetchall():
-            row_dict = dict(row)
-
-            # Convert REAL → Decimal
-            for k, v in row_dict.items():
-                if isinstance(v, float):
-                    row_dict[k] = Decimal(str(v))
-                elif isinstance(v, str):
-                    # Try converting numeric strings
-                    try:
-                        row_dict[k] = Decimal(v)
-                    except InvalidOperation:
-                        pass
-
-            yield self.row_class(**row_dict)
+            yield self._row_to_obj(row)
 
     def _build_dataclass_from_table(self):
         """
@@ -187,23 +187,24 @@ class MojoSkel:
 
         return 0
 
-    def get_row(self, entry_name: str, entry_value: str) -> dict:
+    def get_row(
+        self, entry_name: str, entry_value: str, only_one: bool = True
+    ) -> Union[sqlite3.Row, List[sqlite3.Row], None]:
         """
         Retrieve a single row matching column = value (case-insensitive).
 
         :param entry_name: Column name to filter by.
         :param entry_value: Value to match.
+        :param only_one: If True (default), return the first matching row.
+                If False, return a list of all matching rows.
 
-        :return: The matching row as a dictionary, or None if not found.
+        :return:
+            - If only_one=True → a single sqlite3.Row or None
+            - If only_one=False → list of sqlite3.Row (may be empty)
         """
-        if not entry_value:
-            return None
-        query = (
-            f'SELECT * FROM "{self.table_name}" WHERE LOWER("{entry_name}") = LOWER(?)'
-        )
-        self.cursor.execute(query, (entry_value,))
-        row = self.cursor.fetchone()
-        return dict(row) if row else None
+        match_dict = {f"{entry_name}": entry_value}
+
+        return self.get_row_multi(match_dict, only_one)
 
     def get_row_multi(
         self, match_dict: dict, only_one: bool = True
@@ -225,6 +226,20 @@ class MojoSkel:
         for col, val in match_dict.items():
             if val is None or val == "":
                 conditions.append(f'"{col}" IS NULL')
+            elif isinstance(val, (tuple, list)) and len(val) == 2:
+                lower, upper = val
+                if lower is not None and upper is not None:
+                    conditions.append(f'"{col}" BETWEEN ? AND ?')
+                    values.extend([lower, upper])
+                elif lower is not None:
+                    conditions.append(f'"{col}" >= ?')
+                    values.append(lower)
+                elif upper is not None:
+                    conditions.append(f'"{col}" <= ?')
+                    values.append(upper)
+                else:
+                    # Both are None, effectively no condition on this column
+                    pass
             else:
                 conditions.append(f'"{col}" = ?')
                 values.append(
@@ -233,6 +248,7 @@ class MojoSkel:
                     else val
                 )
 
+        # Base query string
         base_query = (
             f'SELECT * FROM "{self.table_name}" WHERE {" AND ".join(conditions)}'
         )
@@ -240,11 +256,12 @@ class MojoSkel:
         if only_one:
             query = base_query + " LIMIT 1"
             self.cursor.execute(query, values)
-            return self.cursor.fetchone()
+            if row := self.cursor.fetchone():
+                return self._row_to_obj(row)
+            return None
 
-        # Return *all* rows
         self.cursor.execute(base_query, values)
-        return self.cursor.fetchall()
+        return [self._row_to_obj(row) for row in self.cursor.fetchall()]
 
     def table_exists(self) -> bool:
         """

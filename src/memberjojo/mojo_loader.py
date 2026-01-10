@@ -105,21 +105,17 @@ def infer_columns_from_rows(rows: list[dict]) -> dict[str, str]:
 def _create_table_from_columns(table_name: str, columns: dict[str, str]) -> str:
     """
     Generate CREATE TABLE SQL from column type mapping.
+    Adds an auto-incrementing rowid as the primary key.
 
     :param table_name: Table to use when creating columns.
     :param columns: dict of columns to create.
 
     :return: SQL commands to create the table.
     """
-    col_defs = []
-    first = True
+    col_defs = ["rowid INTEGER PRIMARY KEY AUTOINCREMENT"]
 
     for col, col_type in columns.items():
-        if first:
-            col_defs.append(f'"{col}" {col_type} PRIMARY KEY')
-            first = False
-        else:
-            col_defs.append(f'"{col}" {col_type}')
+        col_defs.append(f'"{col}" {col_type}')
 
     return (
         f'CREATE TABLE IF NOT EXISTS "{table_name}" (\n' + ",\n".join(col_defs) + "\n)"
@@ -265,7 +261,7 @@ def _generate_sql_diff(
     """
     Generate a diff between two tables using standard SQLite features.
 
-    - The FIRST column is the primary key.
+    - Uses rowid as the primary key for joining.
     - Returned row shape:
             (diff_type, preview_col1, preview_col2, preview_col3, ...)
 
@@ -284,10 +280,14 @@ def _generate_sql_diff(
 
     cols = [row[1] for row in cols_info]
 
-    key = cols[0]
-    non_key_cols = cols[1:]
+    # Exclude rowid from consideration for key or data
+    main_cols = [c for c in cols if c != "rowid"]
 
-    # 2. Preview columns (key first, limit for readability)
+    # First column is key, others are for comparison
+    key = main_cols[0]
+    non_key_cols = main_cols[1:]
+
+    # 2. Preview columns (key first, then others for readability)
     preview_cols = [key] + non_key_cols[:5]
 
     new_preview = ", ".join(f"n.{c}" for c in preview_cols)

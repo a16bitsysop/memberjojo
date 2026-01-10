@@ -100,35 +100,47 @@ def test_empty_csv_import(tmp_path, db_path):
         txn.import_csv(empty_csv)
 
 
-def test_get_row_multi(payment_db):
+def test_get_row_multi_extended(payment_db):
     """
-    Test retrieving a row using multiple column conditions
+    Test retrieving a row using multiple column conditions, including tuple range and multiple rows.
     """
 
     # Exact match for id=2 and desc='Withdrawal'
     row = payment_db.get_row_multi({"id": "2", "desc": "Withdrawal"})
     assert row is not None
-    assert row["id"] == 2
-    assert row["desc"] == "Withdrawal"
-    assert row["amount"] == 200.0
+    assert row.id == 2
+    assert row.desc == "Withdrawal"
+    assert row.amount == 200.0
 
     # Match with numeric and empty string (stored as NULL)
     row = payment_db.get_row_multi({"id": "5", "desc": None})
     assert row is not None
-    assert row["id"] == 5
-    assert row["desc"] is None
-    assert row["amount"] == 345.0
+    assert row.id == 5
+    assert row.desc is None
+    assert row.amount == 345.0
 
     # Row with None description
     row = payment_db.get_row_multi({"id": "4", "desc": None})
     assert row is not None
-    assert row["id"] == 4
-    assert row["desc"] is None
-    assert row["amount"] == 175.0
+    assert row.id == 4
+    assert row.desc is None
+    assert row.amount == 175.0
 
     # No match
     row = payment_db.get_row_multi({"id": "3", "desc": "Not a match"})
     assert row is None
+
+    # Test with tuple range for amount (between 150 and 300)
+    rows = payment_db.get_row_multi({"amount": (150, 300)}, only_one=False)
+    assert len(rows) == 3  # id=2 (200), id=3 (150), id=4 (175)
+    assert {row.id for row in rows} == {2, 3, 4}
+
+    # Test for getting multiple rows (amount > 100)
+    rows = payment_db.get_row_multi(
+        {"amount": (100, None)}, only_one=False
+    )  # None for upper bound
+    assert len(rows) == 5  # All rows
+    assert {row.id for row in rows} == {1, 2, 3, 4, 5}
 
 
 def test_get_row(payment_db):
@@ -136,4 +148,37 @@ def test_get_row(payment_db):
     Test single row
     """
     row = payment_db.get_row("id", "5")
-    assert row["id"] == 5
+    assert row.id == 5
+
+
+def test_get_row_fuzz_updated(payment_db):
+    """
+    Test fuzzy searching with partial matches, updated for get_row_multi.
+    """
+    # Exact match on description
+    row = payment_db.get_row_multi({"desc": "Withdrawal"})
+    assert row is not None
+    assert row.id == 2
+    assert row.desc == "Withdrawal"
+
+    # Exact match on description with different case (assuming get_row_multi is case-sensitive)
+    row = payment_db.get_row_multi({"desc": "Deposit"})
+    assert row is not None
+    assert row.id == 1
+    assert row.desc == "Deposit"
+
+    # Multiple conditions with exact matching
+    row = payment_db.get_row_multi({"id": "1", "desc": "Deposit"})
+    assert row is not None
+    assert row.id == 1
+    assert row.desc == "Deposit"
+
+    # Match with NULL description
+    row = payment_db.get_row_multi({"id": "4", "desc": None})
+    assert row is not None
+    assert row.id == 4
+    assert row.desc is None
+
+    # No match
+    row = payment_db.get_row_multi({"desc": "xyz"})
+    assert row is None
