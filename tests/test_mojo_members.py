@@ -252,6 +252,9 @@ def test_get_fuzz_name_returns_correct_member(member_db):
     result = member_db.get_fuzz_name("jane smyth")
     assert result == ("Jane", "Smith")
 
+    result = member_db.get_fuzz_name("EMILY STONMEMBERSHIP")
+    assert result == ("Emily", "Stone")
+
 
 def test_get_fuzz_name_raises_value_error_when_no_match_and_found_error_true(member_db):
     """

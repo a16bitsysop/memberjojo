@@ -103,7 +103,7 @@ class Member(MojoSkel):
 
         :raises ValueError: If not found and `found_error` is True.
         """
-        result = self.get_mojo_name(full_name, False)
+        result = self.get_mojo_name(full_name)
         if not result:
             result = self.get_fuzz_name(full_name, found_error)
 
@@ -294,7 +294,7 @@ class Member(MojoSkel):
         rows = self.cursor.fetchall()
 
         choices = [row["full"] for row in rows]
-        matches = get_close_matches(name, choices, n=1, cutoff=0.6)
+        matches = get_close_matches(name, choices, n=1, cutoff=0.7)
 
         if not matches:
             if found_error:
