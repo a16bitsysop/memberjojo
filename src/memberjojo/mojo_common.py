@@ -5,10 +5,7 @@ This module provides a common base class (`MojoSkel`) for other `memberjojo` mod
 It includes helper methods for working with SQLite databases.
 """
 
-# pylint: disable=no-member
-
 from dataclasses import make_dataclass
-from datetime import timedelta, date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Union, List
@@ -40,8 +37,8 @@ class MojoSkel:
         self.db_key = db_key
 
         # Open connection
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.row_factory = sqlite3.Row
+        self.conn = sqlite3.connect(self.db_path)  # pylint: disable=no-member
+        self.conn.row_factory = sqlite3.Row  # pylint: disable=no-member
         self.cursor = self.conn.cursor()
 
         # Apply SQLCipher key
