@@ -227,8 +227,19 @@ class MojoSkel:
             if val is None or val == "":
                 conditions.append(f'"{col}" IS NULL')
             elif isinstance(val, (tuple, list)) and len(val) == 2:
-                conditions.append(f'"{col}" BETWEEN ? AND ?')
-                values.extend(val)
+                lower, upper = val
+                if lower is not None and upper is not None:
+                    conditions.append(f'"{col}" BETWEEN ? AND ?')
+                    values.extend([lower, upper])
+                elif lower is not None:
+                    conditions.append(f'"{col}" >= ?')
+                    values.append(lower)
+                elif upper is not None:
+                    conditions.append(f'"{col}" <= ?')
+                    values.append(upper)
+                else:
+                    # Both are None, effectively no condition on this column
+                    pass
             else:
                 conditions.append(f'"{col}" = ?')
                 values.append(

@@ -159,6 +159,8 @@ def test_member_import_and_validation(member_db):
 
     # Should not be inserted due to not being present
     assert member_db.get_number("Sara Bonnor") == 4
+    # Test for a name that should not be found at all
+    assert member_db.get_number("Non Existent Name") is None
 
     # Should not be inserted due to invalid title
     assert member_db.get_number_first_last("Rick", "Dangerous") is None

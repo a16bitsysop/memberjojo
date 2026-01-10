@@ -100,9 +100,9 @@ def test_empty_csv_import(tmp_path, db_path):
         txn.import_csv(empty_csv)
 
 
-def test_get_row_multi(payment_db):
+def test_get_row_multi_extended(payment_db):
     """
-    Test retrieving a row using multiple column conditions
+    Test retrieving a row using multiple column conditions, including tuple range and multiple rows.
     """
 
     # Exact match for id=2 and desc='Withdrawal'
@@ -129,6 +129,16 @@ def test_get_row_multi(payment_db):
     # No match
     row = payment_db.get_row_multi({"id": "3", "desc": "Not a match"})
     assert row is None
+
+    # Test with tuple range for amount (between 150 and 300)
+    rows = payment_db.get_row_multi({"amount": (150, 300)}, only_one=False)
+    assert len(rows) == 3 # id=2 (200), id=3 (150), id=4 (175)
+    assert {row.id for row in rows} == {2, 3, 4}
+
+    # Test for getting multiple rows (amount > 100)
+    rows = payment_db.get_row_multi({"amount": (100, None)}, only_one=False) # None for upper bound
+    assert len(rows) == 5 # All rows
+    assert {row.id for row in rows} == {1, 2, 3, 4, 5}
 
 
 def test_get_row(payment_db):
