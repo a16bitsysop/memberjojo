@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Tuple
 
 import re
+import requests
 import sqlite3 as sqlite3_builtin
 
 
@@ -333,3 +334,6 @@ def _generate_sql_diff(
         """
 
     return list(conn.execute(sql))
+
+
+    def download_data(url: str, session: resquests.Session) -> :
