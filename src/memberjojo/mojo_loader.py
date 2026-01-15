@@ -173,7 +173,7 @@ def import_csv_helper(conn, table_name: str, csv_path: Path):
 
     # Read CSV rows
     with csv_path.open(newline="", encoding="utf-8") as f:
-        reader = DictReader(f)
+        reader = list(DictReader(f))
         if not reader:
             raise ValueError("CSV file is empty.")
         import_data(conn, table_name, reader)
