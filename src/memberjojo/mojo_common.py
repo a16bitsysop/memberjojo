@@ -10,6 +10,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Union, List
 
+import requests
+
 from sqlcipher3 import dbapi2 as sqlite3
 
 from . import mojo_loader
@@ -120,30 +122,26 @@ class MojoSkel:
 
         return make_dataclass(f"{self.table_name}_Row", fields)
 
-    def import_csv(self, csv_path: Path):
+    def rename_old_table(self, existing: bool):
         """
-        Import the passed CSV into the encrypted sqlite database.
-        If a previous table exists, generate a diff using
-        mojo_loader.diff_cipher_tables().
+        If there was an exising table rename for comparison
 
-        :param csv_path: Path like path of csv file.
+        :param existing: bool for table exists
         """
         old_table = f"{self.table_name}_old"
-        had_existing = self.table_exists()
-
-        # 1. Preserve existing table
-        if had_existing:
+        # Preserve existing table
+        if existing:
             self.conn.execute(f"ALTER TABLE {self.table_name} RENAME TO {old_table}")
+        return old_table
 
-        # 2. Import CSV as new table
-        mojo_loader.import_csv_helper(self.conn, self.table_name, csv_path)
-        self.row_class = self._build_dataclass_from_table()
+    def print_diff(self, old_table: str):
+        """
+        Print out diff between old and new db
 
-        if not had_existing:
-            return
-
+        :param old_table: The name the existing table was renamed to
+        """
         try:
-            # 3. Diff old vs new (SQLCipher → sqlite3 → dataclasses)
+            # Diff old vs new (SQLCipher → sqlite3 → dataclasses)
             diff_rows = mojo_loader.diff_cipher_tables(
                 self.conn,
                 new_table=self.table_name,
@@ -156,8 +154,46 @@ class MojoSkel:
                     print(diff.diff_type, diff.preview)
 
         finally:
-            # 4. Cleanup old table (always)
+            # Cleanup old table (always)
             self.conn.execute(f"DROP TABLE {old_table}")
+
+    def download_csv(self, url: str, session: requests.Session):
+        """
+        Download the CSV from url and import into the sqlite database.
+        If a previous table exists, generate a diff.
+
+        :param url: url of the csv to download
+        :param session: Requests session to use for download
+        """
+        had_existing = self.table_exists()
+        old_table = self.rename_old_table(had_existing)
+
+        # Download CSV as new table
+        mojo_loader.download_csv_helper(self.conn, self.table_name, url, session)
+        self.row_class = self._build_dataclass_from_table()
+
+        if not had_existing:
+            return
+
+        self.print_diff(old_table)
+
+    def import_csv(self, csv_path: Path):
+        """
+        Import the passed CSV into the encrypted sqlite database.
+
+        :param csv_path: Path like path of csv file.
+        """
+        had_existing = self.table_exists()
+        old_table = self.rename_old_table(had_existing)
+
+        # Import CSV as new table
+        mojo_loader.import_csv_helper(self.conn, self.table_name, csv_path)
+        self.row_class = self._build_dataclass_from_table()
+
+        if not had_existing:
+            return
+
+        self.print_diff(old_table)
 
     def show_table(self, limit: int = 2):
         """

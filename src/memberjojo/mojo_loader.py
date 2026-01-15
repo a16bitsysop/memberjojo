@@ -6,12 +6,14 @@ Helper module for importing a CSV into a SQLite database.
 from collections import defaultdict, Counter
 from csv import DictReader
 from dataclasses import dataclass
+from io import StringIO
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any, IO, Tuple
 
 import re
-import requests
 import sqlite3 as sqlite3_builtin
+
+import requests
 
 
 @dataclass(frozen=True)
@@ -128,6 +130,35 @@ def _create_table_from_columns(table_name: str, columns: dict[str, str]) -> str:
 # -----------------------
 
 
+def import_data(conn, table_name: str, reader: DictReader):
+    """
+    Import data in the DictReader into the SQLite3 database at conn
+    """
+    inferred_cols = infer_columns_from_rows(reader)
+
+    cursor = conn.cursor()
+    # Drop existing table
+    cursor.execute(f'DROP TABLE IF EXISTS "{table_name}";')
+
+    # Create table
+    create_sql = _create_table_from_columns(table_name, inferred_cols)
+    cursor.execute(create_sql)
+
+    # Insert rows
+    cols = list(reader[0].keys())
+    norm_map = {c: _normalize(c) for c in cols}
+    colnames = ",".join(f'"{norm_map[c]}"' for c in cols)
+    placeholders = ",".join("?" for _ in cols)
+    insert_sql = f'INSERT INTO "{table_name}" ({colnames}) VALUES ({placeholders})'
+
+    for row in reader:
+        values = [row[c] if row[c] != "" else None for c in cols]
+        cursor.execute(insert_sql, values)
+
+    cursor.close()
+    conn.commit()
+
+
 def import_csv_helper(conn, table_name: str, csv_path: Path):
     """
     Import CSV into database using given cursor.
@@ -142,32 +173,10 @@ def import_csv_helper(conn, table_name: str, csv_path: Path):
 
     # Read CSV rows
     with csv_path.open(newline="", encoding="utf-8") as f:
-        reader = list(DictReader(f))
+        reader = DictReader(f)
         if not reader:
             raise ValueError("CSV file is empty.")
-        inferred_cols = infer_columns_from_rows(reader)
-
-        cursor = conn.cursor()
-        # Drop existing table
-        cursor.execute(f'DROP TABLE IF EXISTS "{table_name}";')
-
-        # Create table
-        create_sql = _create_table_from_columns(table_name, inferred_cols)
-        cursor.execute(create_sql)
-
-        # Insert rows
-        cols = list(reader[0].keys())
-        norm_map = {c: _normalize(c) for c in cols}
-        colnames = ",".join(f'"{norm_map[c]}"' for c in cols)
-        placeholders = ",".join("?" for _ in cols)
-        insert_sql = f'INSERT INTO "{table_name}" ({colnames}) VALUES ({placeholders})'
-
-        for row in reader:
-            values = [row[c] if row[c] != "" else None for c in cols]
-            cursor.execute(insert_sql, values)
-
-    cursor.close()
-    conn.commit()
+        import_data(conn, table_name, reader)
 
 
 # -----------------------
@@ -273,7 +282,7 @@ def _generate_sql_diff(
     :return: list of sqlite rows that are changed
     """
 
-    # 1. Introspect schema (order-preserving)
+    # Introspect schema (order-preserving)
     cols_info = conn.execute(f"PRAGMA table_info({new_table})").fetchall()
 
     if not cols_info:
@@ -288,13 +297,13 @@ def _generate_sql_diff(
     key = main_cols[0]
     non_key_cols = main_cols[1:]
 
-    # 2. Preview columns (key first, then others for readability)
+    #  Preview columns (key first, then others for readability)
     preview_cols = [key] + non_key_cols[:5]
 
     new_preview = ", ".join(f"n.{c}" for c in preview_cols)
     old_preview = ", ".join(f"o.{c}" for c in preview_cols)
 
-    # 3. Row-value comparison (NULL-safe)
+    # Row-value comparison (NULL-safe)
     if non_key_cols:
         changed_predicate = (
             f"({', '.join(f'n.{c}' for c in non_key_cols)}) "
@@ -336,4 +345,36 @@ def _generate_sql_diff(
     return list(conn.execute(sql))
 
 
-    def download_data(url: str, session: resquests.Session) -> :
+def download_csv_helper(
+    conn, table_name: str, url: str, session: requests.Session
+) -> IO[str]:
+    """
+    Download url into a StringIO file object using streaming
+    and import into database
+
+    :param conn: The SQLite3 database connection to use
+    :param table_name: The name of the table to import it into
+    :param url: URL of the csv to download
+    :param session: A requests session to use for the download
+    """
+
+    print(f"Downloading from: {url}")
+
+    # Enable streaming
+    with session.get(url, stream=True) as resp:
+        resp.raise_for_status()
+
+        # Initialize the string buffer
+        string_buffer = StringIO()
+
+        # Stream decoded text
+        # decode_unicode=True uses the encoding from the response headers
+        for chunk in resp.iter_content(chunk_size=8192, decode_unicode=True):
+            if chunk:
+                string_buffer.write(chunk)
+
+        # Reset pointer to the beginning for DictReader
+        string_buffer.seek(0)
+
+        print(f"✅ Downloaded with encoding {resp.encoding}.")
+        import_data(conn, table_name, DictReader(string_buffer))
