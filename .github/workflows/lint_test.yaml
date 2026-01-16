@@ -39,7 +39,7 @@ jobs:
       - name: 🛠️ Install  libsqlcipher for sqlcipher3
         run: |
           sudo apt-get --no-install-recommends --no-install-suggests install libsqlcipher-dev
-          pip install ".sqlcipher"
+          pip install ".[sqlcipher]"
 
       - name: 🧪 Run pytest with sqlcipher
         run: |
