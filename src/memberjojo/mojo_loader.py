@@ -377,4 +377,4 @@ def download_csv_helper(
         string_buffer.seek(0)
 
         print(f"✅ Downloaded with encoding {resp.encoding}.")
-        import_data(conn, table_name, DictReader(string_buffer))
+        import_data(conn, table_name, list(DictReader(string_buffer)))

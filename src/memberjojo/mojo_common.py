@@ -275,6 +275,9 @@ class MojoSkel:
         for col, val in match_dict.items():
             if val is None or val == "":
                 conditions.append(f'"{col}" IS NULL')
+            elif isinstance(val, Like):
+                conditions.append(f'"{col}" LIKE ?')
+                values.append(val.pattern)
             elif isinstance(val, (tuple, list)) and len(val) == 2:
                 lower, upper = val
                 if lower is not None and upper is not None:
@@ -321,3 +324,4 @@ class MojoSkel:
             (self.table_name,),
         )
         return self.cursor.fetchone() is not None
+                    
