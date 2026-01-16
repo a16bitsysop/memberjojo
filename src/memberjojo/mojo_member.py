@@ -19,7 +19,8 @@ class Member(MojoSkel):
     from CSV and performing queries like lookup by name or member number.
 
     :param member_db_path (Path): Path to the SQLite database file.
-    :param db_key: key to unlock the encrypted sqlite database, unencrypted if sqlcipher3 not installed or unset.
+    :param db_key: key to unlock the encrypted sqlite database,
+        unencrypted if sqlcipher3 not installed or unset.
     :param table_name (str): (optional) Table name to use. Defaults to "members".
     """
 

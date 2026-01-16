@@ -38,7 +38,8 @@ class MojoSkel:
         dictionary-style access to columns.
 
         :param db_path: Path to the SQLite database file.
-        :param db_key: key to unlock the encrypted sqlite database, unencrypted if sqlcipher3 not installed or unset.
+        :param db_key: key to unlock the encrypted sqlite database,
+            unencrypted if sqlcipher3 not installed or unset.
         :param table_name: Name of the table to operate on, or create when importing.
         """
         self.db_path = db_path

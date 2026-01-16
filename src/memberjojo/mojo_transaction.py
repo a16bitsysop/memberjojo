@@ -16,7 +16,8 @@ class Transaction(MojoSkel):
         MojoSkel: Base class with transaction database operations.
 
     :param payment_db_path: Path to the SQLite database.
-    :param db_key: key to unlock the encrypted sqlite database, unencrypted if sqlcipher3 not installed or unset.
+    :param db_key: key to unlock the encrypted sqlite database,
+        unencrypted if sqlcipher3 not installed or unset.
     :param table_name: (optional) Name of the table. Defaults to "payments".
     """
 
