@@ -277,7 +277,7 @@ class Member(MojoSkel):
         Searches across first_name and last_name fields.
 
         :param name: Free text name to search for (partial match).
-        
+
 
         :return: Tuple of (first_name, last_name) or None
 
@@ -306,4 +306,3 @@ class Member(MojoSkel):
         # return the sqlite row for the best match
         row = next(r for r in rows if r["full"] == match)
         return (row["first_name"], row["last_name"])
-    
