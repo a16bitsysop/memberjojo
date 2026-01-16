@@ -38,7 +38,7 @@ class MojoSkel:
         dictionary-style access to columns.
 
         :param db_path: Path to the SQLite database file.
-        :param db_key: key to unlock the encrypted sqlite database, or encrypt new one.
+        :param db_key: key to unlock the encrypted sqlite database, unencrypted if sqlcipher3 not installed or unset.
         :param table_name: Name of the table to operate on, or create when importing.
         """
         self.db_path = db_path
@@ -50,7 +50,7 @@ class MojoSkel:
         self.conn.row_factory = sqlite3.Row  # pylint: disable=no-member
         self.cursor = self.conn.cursor()
 
-        if HAS_SQLCIPHER:
+        if HAS_SQLCIPHER and db_key:
             # Apply SQLCipher key
             self.cursor.execute(f"PRAGMA key='{db_key}'")
             self.cursor.execute("PRAGMA cipher_compatibility = 4")
@@ -313,7 +313,7 @@ class MojoSkel:
 
     def table_exists(self) -> bool:
         """
-        Return true or false if a table exists
+        Return True or False if a table exists
         """
         self.cursor.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1;",

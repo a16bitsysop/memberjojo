@@ -19,8 +19,8 @@ class Member(MojoSkel):
     from CSV and performing queries like lookup by name or member number.
 
     :param member_db_path (Path): Path to the SQLite database file.
+    :param db_key: key to unlock the encrypted sqlite database, unencrypted if sqlcipher3 not installed or unset.
     :param table_name (str): (optional) Table name to use. Defaults to "members".
-    :param db_key: (optional) key to unlock the encrypted sqlite database, unencrypted if unset.
     """
 
     def __init__(
@@ -41,7 +41,7 @@ class Member(MojoSkel):
         :param entry_name: The entry name to return as a bool
         :param member_number: The member number to check value of entry_name
 
-        :return: True is entry is yes otherwise false
+        :return: True is entry is yes otherwise False
 
         :raises ValueError: If entry name not found.
         """
@@ -95,6 +95,7 @@ class Member(MojoSkel):
         Find a member number by passed full_name.
         Tries first and last, and then middle last if 3 words,
         Then initial of first name if initials passed.
+        Finnaly a fuzzy lookup is tried.
 
         :param full_name: Full name of the member.
         :param found_error: (optional) Raise ValueError if not found.
@@ -276,11 +277,9 @@ class Member(MojoSkel):
         Searches across first_name and last_name fields.
 
         :param name: Free text name to search for (partial match).
-        :param only_one: If True (default), return the first matching row.
-                        If False, return a list of all matching rows.
+        
 
-        :return:
-            - If only_one=True → a single tuple of (first_name, last_name) or None
+        :return: Tuple of (first_name, last_name) or None
 
         :raises ValueError: If not found and `found_error` is True.
         """
@@ -307,3 +306,4 @@ class Member(MojoSkel):
         # return the sqlite row for the best match
         row = next(r for r in rows if r["full"] == match)
         return (row["first_name"], row["last_name"])
+    
