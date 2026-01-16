@@ -324,4 +324,3 @@ class MojoSkel:
             (self.table_name,),
         )
         return self.cursor.fetchone() is not None
-                    
