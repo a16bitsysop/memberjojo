@@ -1,3 +1,8 @@
+3.0:
+  * return a dataclass instead of an sqlite3 row in functions that return rows
+  * get_fuzz_name to member class to get fuzzy matched names
+  * add get_bool function to member class to return True of False for yes/no fields on membermojo
+  * add download_csv to the base class to download a csv from a url directly into a db
 2.2:
   * add printing a diff when importing a CSV to give a summary of changes
 2.1:
