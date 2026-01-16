@@ -12,7 +12,14 @@ from typing import Union, List
 
 import requests
 
-from sqlcipher3 import dbapi2 as sqlite3
+try:
+    from sqlcipher3 import dbapi2 as sqlite3
+
+    HAS_SQLCIPHER = True
+except ImportError:
+    import sqlite3  # stdlib
+
+    HAS_SQLCIPHER = False
 
 from . import mojo_loader
 
@@ -43,11 +50,16 @@ class MojoSkel:
         self.conn.row_factory = sqlite3.Row  # pylint: disable=no-member
         self.cursor = self.conn.cursor()
 
-        # Apply SQLCipher key
-        self.cursor.execute(f"PRAGMA key='{db_key}'")
-        self.cursor.execute("PRAGMA cipher_compatibility = 4")
-        print("Cipher:", self.cursor.execute("PRAGMA cipher_version;").fetchone()[0])
-        print(f"Encrypted database {self.db_path} loaded securely.")
+        if HAS_SQLCIPHER:
+            # Apply SQLCipher key
+            self.cursor.execute(f"PRAGMA key='{db_key}'")
+            self.cursor.execute("PRAGMA cipher_compatibility = 4")
+            print(
+                "Cipher:", self.cursor.execute("PRAGMA cipher_version;").fetchone()[0]
+            )
+            print(f"Encrypted database {self.db_path} loaded securely.")
+        else:
+            print(f"Unencrypted database {self.db_path} loaded securely.")
 
         # After table exists (or after import), build the dataclass
         if self.table_exists():

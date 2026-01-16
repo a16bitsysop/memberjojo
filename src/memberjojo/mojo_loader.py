@@ -201,7 +201,7 @@ def _diffrow_from_sql_row(row: sqlite3_builtin.Row) -> DiffRow:
 
 
 def diff_cipher_tables(
-    cipher_conn,
+    conn,
     *,
     new_table: str,
     old_table: str,
@@ -210,7 +210,7 @@ def diff_cipher_tables(
     Copy old and new tables from SQLCipher into a single
     in-memory sqlite3 database and diff them there.
 
-    :param cipher_conn: sqlite connection to the encrypted db
+    :param conn: sqlite connection to the db
     :param new_table: name of the new table for comparison
     :param old_table: name of the old table for comparison
 
@@ -222,8 +222,8 @@ def diff_cipher_tables(
 
     try:
         for table in (old_table, new_table):
-            # 1. Clone schema using SQLite itself
-            schema_sql = cipher_conn.execute(
+            # Clone schema using SQLite itself
+            schema_sql = conn.execute(
                 """
                 SELECT sql
                 FROM sqlite_master
@@ -238,7 +238,7 @@ def diff_cipher_tables(
             plain.execute(schema_sql[0])
 
             # 2. Copy data
-            rows = cipher_conn.execute(f"SELECT * FROM {table}")
+            rows = conn.execute(f"SELECT * FROM {table}")
             cols = [d[0] for d in rows.description]
 
             col_list = ", ".join(cols)

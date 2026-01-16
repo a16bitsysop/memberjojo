@@ -22,9 +22,6 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: 🛠️ Install  libsqlcipher for sqlcipher3
-        run: sudo apt-get --no-install-recommends --no-install-suggests install libsqlcipher-dev
-
       - name: 🛠️ Install build deps
         run: pip install ".[dev,lint]"
 
@@ -33,6 +30,16 @@ jobs:
 
       - name: 🧹 Run pylint
         run: pylint .
+
+      - name: 🧪 Run pytest without sqlcipher
+        run: |
+          coverage run -m pytest
+          coverage report -m
+
+      - name: 🛠️ Install  libsqlcipher for sqlcipher3
+        run: |
+          sudo apt-get --no-install-recommends --no-install-suggests install libsqlcipher-dev
+          pip install ".sqlcipher"
 
       - name: 🧪 Run pytest with sqlcipher
         run: |
