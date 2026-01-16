@@ -22,6 +22,7 @@ except ImportError:
     HAS_SQLCIPHER = False
 
 from . import mojo_loader
+from .sql_query import Like
 
 
 class MojoSkel:
