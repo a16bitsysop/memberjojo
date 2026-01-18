@@ -177,8 +177,8 @@ class MojoSkel:
         Download the CSV from url and import into the sqlite database.
         If a previous table exists, generate a diff.
 
-        :param url: url of the csv to download
         :param session: Requests session to use for download
+        :param url: url of the csv to download
         """
         had_existing = self.table_exists()
         old_table = self.rename_old_table(had_existing)
