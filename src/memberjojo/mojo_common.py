@@ -143,6 +143,7 @@ class MojoSkel:
         :param existing: bool for table exists
         """
         old_table = f"{self.table_name}_old"
+        self.conn.execute(f"DROP TABLE IF EXISTS {old_table}")
         # Preserve existing table
         if existing:
             self.conn.execute(f"ALTER TABLE {self.table_name} RENAME TO {old_table}")
@@ -171,7 +172,7 @@ class MojoSkel:
             # Cleanup old table (always)
             self.conn.execute(f"DROP TABLE {old_table}")
 
-    def download_csv(self, url: str, session: requests.Session):
+    def download_csv(self, session: requests.Session, url: str):
         """
         Download the CSV from url and import into the sqlite database.
         If a previous table exists, generate a diff.
