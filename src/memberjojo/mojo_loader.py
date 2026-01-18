@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Helper module for importing a CSV into a SQLite database.
+Helper module for importing a CSV into a SQLite database
 """
 
 from collections import defaultdict, Counter
@@ -19,7 +19,7 @@ import requests
 @dataclass(frozen=True)
 class DiffRow:
     """
-    Represents a single diff result.
+    Represents a single diff result
 
     - diff_type: 'added' | 'deleted' | 'changed'
     - preview: tuple of values, with preview[0] == key
@@ -36,11 +36,11 @@ class DiffRow:
 
 def _normalize(name: str) -> str:
     """
-    Normalize a column name: lowercase, remove symbols, convert to snake case.
+    Normalize a column name: lowercase, remove symbols, convert to snake case
 
-    :param name: Raw name to normalize.
+    :param name: Raw name to normalize
 
-    :return: Normalized lowercase string in snake case with no symbols.
+    :return: Normalized lowercase string in snake case with no symbols
     """
     name = name.strip().lower()
     name = re.sub(r"[^a-z0-9]+", "_", name)
@@ -49,7 +49,7 @@ def _normalize(name: str) -> str:
 
 def _guess_type(value: any) -> str:
     """
-    Guess SQLite data type of a CSV value: 'INTEGER', 'REAL', or 'TEXT'.
+    Guess SQLite data type of a CSV value: 'INTEGER', 'REAL', or 'TEXT'
 
     :param value: entry from sqlite database to guess the type of
 
@@ -74,8 +74,8 @@ def _guess_type(value: any) -> str:
 
 def infer_columns_from_rows(rows: list[dict]) -> dict[str, str]:
     """
-    Infer column types from CSV rows.
-    Returns mapping: normalized column name -> SQLite type.
+    Infer column types from CSV rows
+    Returns mapping: normalized column name -> SQLite type
 
     :param rows: list of rows to use for inference
 
@@ -107,13 +107,13 @@ def infer_columns_from_rows(rows: list[dict]) -> dict[str, str]:
 
 def _create_table_from_columns(table_name: str, columns: dict[str, str]) -> str:
     """
-    Generate CREATE TABLE SQL from column type mapping.
-    Adds an auto-incrementing rowid as the primary key.
+    Generate CREATE TABLE SQL from column type mapping
+    Adds an auto-incrementing rowid as the primary key
 
-    :param table_name: Table to use when creating columns.
-    :param columns: dict of columns to create.
+    :param table_name: Table to use when creating columns
+    :param columns: dict of columns to create
 
-    :return: SQL commands to create the table.
+    :return: SQL commands to create the table
     """
     col_defs = ["rowid INTEGER PRIMARY KEY AUTOINCREMENT"]
 
@@ -133,6 +133,10 @@ def _create_table_from_columns(table_name: str, columns: dict[str, str]) -> str:
 def import_data(conn, table_name: str, reader: DictReader):
     """
     Import data in the DictReader into the SQLite3 database at conn
+
+    :param conn: SQLite database connection to use
+    :param table_name: Name of the table to import into
+    :param reader: A Dictreader object to import from
     """
     inferred_cols = infer_columns_from_rows(reader)
 
@@ -161,12 +165,12 @@ def import_data(conn, table_name: str, reader: DictReader):
 
 def import_csv_helper(conn, table_name: str, csv_path: Path):
     """
-    Import CSV into database using given cursor.
-    Column types inferred automatically.
+    Import CSV into database using given cursor
+    Column types inferred automatically
 
-    :param conn: SQLite database connection to use.
-    :param table_name: Table to import the CSV into.
-    :param csv_path: Path like path of the CSV file to import.
+    :param conn: SQLite database connection to use
+    :param table_name: Table to import the CSV into
+    :param csv_path: Path like path of the CSV file to import
     """
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV file not found: {csv_path}")
@@ -186,7 +190,7 @@ def import_csv_helper(conn, table_name: str, csv_path: Path):
 
 def _diffrow_from_sql_row(row: sqlite3_builtin.Row) -> DiffRow:
     """
-    Convert a sqlite3.Row from generate_sql_diff into DiffRow.
+    Convert a sqlite3.Row from generate_sql_diff into DiffRow
     Row shape:
         (diff_type, col1, col2, col3, ...)
 
@@ -269,9 +273,9 @@ def _generate_sql_diff(
     old_table: str,
 ) -> list[sqlite3_builtin.Row]:
     """
-    Generate a diff between two tables using standard SQLite features.
+    Generate a diff between two tables using standard SQLite features
 
-    - Uses rowid as the primary key for joining.
+    - Uses rowid as the primary key for joining
     - Returned row shape:
             (diff_type, preview_col1, preview_col2, preview_col3, ...)
 

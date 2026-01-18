@@ -3,18 +3,22 @@
 `memberjojo` is a Python library for using [Membermojo](http://membermojo.co.uk/)
 data from CSV imports.\
 It provides member database, and completed payments querying.\
-This is done in a local SQLite database which is encrypted, and does not alter
-anything on Membermojo.\
+This is done in a local SQLite database which is optionally encrypted if sqlcipher3
+is installed, and does not alter anything on Membermojo.\
 It provides tools to load, and query membership and transaction data efficiently
 without having to use SQLite directly.\
 When importing CSV files existing entries are dropped before import, so you can
-just import the latest download and the local database is updated.
+just import the latest download and the local database is updated with a summary
+diff printed out.
+
+Using the download_csv function the csv can be downloaded directly into the db,
+which can also be in memory if :memory: is used as the db path.
 
 ---
 
 ## Installation
 
-Installing via `pip` on macos with `sqlcipher` installed via homebrew:\
+Installing via `pip` on macos with optional `sqlcipher` installed via homebrew:\
 (The sqlcipher bindings are compiled by pip so the `C_INCLUDE_PATH` and
 `LIBRARY_PATH` are needed for the `libsqlcipher` files to be found)
 
@@ -22,13 +26,19 @@ Installing via `pip` on macos with `sqlcipher` installed via homebrew:\
 brew install sqlcipher
 export C_INCLUDE_PATH="/opt/homebrew/opt/sqlcipher/include"
 export LIBRARY_PATH="/opt/homebrew/opt/sqlcipher/lib"
-pip install memberjojo
+pip install memberjojo[sqlciper]
 ```
 
 Installing via `pip` on ubuntu:
 
 ```bash
 sudo apt-get --no-install-recommends --no-install-suggests install libsqlcipher-dev
+pip install memberjojo[sqlcipher]
+```
+
+Installing via `pip` without sqlcipher:
+
+```bash
 pip install memberjojo
 ```
 

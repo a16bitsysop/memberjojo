@@ -7,6 +7,6 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Like:
-    """Marker type for SQL LIKE comparisons."""
+    """Marker type for SQL LIKE comparisons"""
 
     pattern: str

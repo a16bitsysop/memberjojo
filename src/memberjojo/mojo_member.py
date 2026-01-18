@@ -1,8 +1,8 @@
 """
-Member module for creating and interacting with a SQLite database.
+Member module for creating and interacting with a SQLite database
 
 This module loads data from a `members.csv` file downloaded from Membermojo,
-stores it in SQLite, and provides helper functions for member lookups.
+stores it in SQLite, and provides helper functions for member lookups
 """
 
 from difflib import get_close_matches
@@ -13,15 +13,15 @@ from .mojo_common import MojoSkel
 
 class Member(MojoSkel):
     """
-    Subclass of MojoSkel providing member-specific database functions.
+    Subclass of MojoSkel providing member-specific database functions
 
     This class connects to a SQLite database and supports importing member data
-    from CSV and performing queries like lookup by name or member number.
+    from CSV and performing queries like lookup by name or member number
 
-    :param member_db_path (Path): Path to the SQLite database file.
+    :param member_db_path (Path): Path to the SQLite database file
     :param db_key: key to unlock the encrypted sqlite database,
-        unencrypted if sqlcipher3 not installed or unset.
-    :param table_name (str): (optional) Table name to use. Defaults to "members".
+        unencrypted if sqlcipher3 not installed or unset
+    :param table_name (str): (optional) Table name to use. Defaults to "members"
     """
 
     def __init__(
@@ -31,7 +31,7 @@ class Member(MojoSkel):
         table_name: str = "members",
     ):
         """
-        Initialize the Member database handler.
+        Initialize the Member database handler
         """
         super().__init__(member_db_path, db_key, table_name)
 
@@ -44,7 +44,7 @@ class Member(MojoSkel):
 
         :return: True is entry is yes otherwise False
 
-        :raises ValueError: If entry name not found.
+        :raises ValueError: If entry name not found
         """
         sql = f"""
             SELECT "{entry_name}"
@@ -66,15 +66,15 @@ class Member(MojoSkel):
         self, first_name: str, last_name: str, found_error: bool = False
     ) -> Optional[int]:
         """
-        Find a member number based on first and last name (case-insensitive).
+        Find a member number based on first and last name (case-insensitive)
 
-        :param first_name: First name of the member.
-        :param last_name: Last name of the member.
-        :param found_error: (optional): If True, raises ValueError if not found.
+        :param first_name: First name of the member
+        :param last_name: Last name of the member
+        :param found_error: (optional): If True, raises ValueError if not found
 
-        :return: The member number if found, otherwise None.
+        :return: The member number if found, otherwise None
 
-        :raises ValueError: If not found and `found_error` is True.
+        :raises ValueError: If not found and `found_error` is True
         """
         sql = f"""
             SELECT "member_number"
@@ -93,17 +93,17 @@ class Member(MojoSkel):
 
     def get_number(self, full_name: str, found_error: bool = False) -> Optional[int]:
         """
-        Find a member number by passed full_name.
+        Find a member number by passed full_name
         Tries first and last, and then middle last if 3 words,
-        Then initial of first name if initials passed.
-        Finnaly a fuzzy lookup is tried.
+        Then initial of first name if initials passed
+        Finnaly a fuzzy lookup is tried
 
-        :param full_name: Full name of the member.
-        :param found_error: (optional) Raise ValueError if not found.
+        :param full_name: Full name of the member
+        :param found_error: (optional) Raise ValueError if not found
 
-        :return: Member number if found, else None.
+        :return: Member number if found, else None
 
-        :raises ValueError: If not found and `found_error` is True.
+        :raises ValueError: If not found and `found_error` is True
         """
         result = self.get_mojo_name(full_name)
         if not result:
@@ -156,7 +156,7 @@ class Member(MojoSkel):
         self, full_name: str, found_error: bool = False
     ) -> Optional[tuple]:
         """
-        Resolve a member name from a free-text full name.
+        Resolve a member name from a free-text full name
 
         **Search order**
 
@@ -165,14 +165,14 @@ class Member(MojoSkel):
         3. initial 1st letter + last
         4. initial 2nd letter + last (for two-letter initials)
 
-        Returns (first_name, last_name) or None.
+        Returns (first_name, last_name) or None
 
-        :param full_name: Full name of the member to find.
-        :param found_error: (optional) Raise ValueError if not found.
+        :param full_name: Full name of the member to find
+        :param found_error: (optional) Raise ValueError if not found
 
-        :return: Membermojo name if found, else None.
+        :return: Membermojo name if found, else None
 
-        :raises ValueError: If not found and `found_error` is True.
+        :raises ValueError: If not found and `found_error` is True
         """
 
         parts = full_name.strip().split()
@@ -240,11 +240,11 @@ class Member(MojoSkel):
 
     def get_first_last_name(self, member_number: int) -> Optional[str]:
         """
-        Get full name for a given member number.
+        Get full name for a given member number
 
-        :param member_number: Member number to look up.
+        :param member_number: Member number to look up
 
-        :return: Full name as tuple, or None if not found.
+        :return: Full name as tuple, or None if not found
         """
         sql = f"""
             SELECT "first_name", "last_name"
@@ -258,11 +258,11 @@ class Member(MojoSkel):
 
     def get_name(self, member_number: int) -> Optional[str]:
         """
-        Get full name for a given member number.
+        Get full name for a given member number
 
-        :param member_number: Member number to look up.
+        :param member_number: Member number to look up
 
-        :return: Full name as "First Last", or None if not found.
+        :return: Full name as "First Last", or None if not found
         """
 
         result = self.get_first_last_name(member_number)
@@ -274,15 +274,15 @@ class Member(MojoSkel):
 
     def get_fuzz_name(self, name: str, found_error: bool = False):
         """
-        Fuzzy search for members by name using partial matching.
-        Searches across first_name and last_name fields.
+        Fuzzy search for members by name using partial matching
+        Searches across first_name and last_name fields
 
-        :param name: Free text name to search for (partial match).
+        :param name: Free text name to search for (partial match)
 
 
         :return: Tuple of (first_name, last_name) or None
 
-        :raises ValueError: If not found and `found_error` is True.
+        :raises ValueError: If not found and `found_error` is True
         """
 
         name = name.strip().lower()

@@ -1,8 +1,8 @@
 """
 MojoSkel base class
 
-This module provides a common base class (`MojoSkel`) for other `memberjojo` modules.
-It includes helper methods for working with SQLite databases.
+This module provides a common base class (`MojoSkel`) for other `memberjojo` modules
+It includes helper methods for working with SQLite databases
 """
 
 from dataclasses import make_dataclass
@@ -28,20 +28,20 @@ from .sql_query import Like
 class MojoSkel:
     """
     Establishes a connection to a SQLite database and provides helper methods
-    for querying tables.
+    for querying tables
     """
 
     def __init__(self, db_path: str, db_key: str, table_name: str):
         """
-        Initialize the MojoSkel class.
+        Initialize the MojoSkel class
 
         Connects to the SQLite database and sets the row factory for
         dictionary-style access to columns.
 
-        :param db_path: Path to the SQLite database file.
+        :param db_path: Path to the SQLite database file
         :param db_key: key to unlock the encrypted sqlite database,
-            unencrypted if sqlcipher3 not installed or unset.
-        :param table_name: Name of the table to operate on, or create when importing.
+            unencrypted if sqlcipher3 not installed or unset
+        :param table_name: Name of the table to operate on, or create when importing
         """
         self.db_path = db_path
         self.table_name = table_name
@@ -71,7 +71,7 @@ class MojoSkel:
 
     def __iter__(self) -> Iterator[Any]:
         """
-        Allow iterating over the class, by outputing all members.
+        Allow iterating over the class, by outputing all members
         """
         if not self.row_class:
             raise RuntimeError("Table not loaded yet — no dataclass available")
@@ -82,6 +82,8 @@ class MojoSkel:
         Convert an sqlite3 row into a dataclass object
 
         :param row: The sqlite3 row to convert
+
+        :return: A dataclass object of the row
         """
         row_dict = dict(row)
 
@@ -99,8 +101,10 @@ class MojoSkel:
 
     def _iter_rows(self) -> Iterator[Any]:
         """
-        Iterate over table rows and yield dynamically-created dataclass objects.
-        Converts REAL columns to Decimal automatically.
+        Iterate over table rows and yield dynamically-created dataclass objects
+        Converts REAL columns to Decimal automatically
+
+        :return: An interator of dataclass objects for rows
         """
 
         sql = f'SELECT * FROM "{self.table_name}"'
@@ -113,12 +117,12 @@ class MojoSkel:
 
     def _build_dataclass_from_table(self) -> Type[Any]:
         """
-        Dynamically create a dataclass from the table schema.
+        Dynamically create a dataclass from the table schema
         INTEGER → int
         REAL → Decimal
         TEXT → str
 
-        :return: A dataclass built from the table columns and types.
+        :return: A dataclass built from the table columns and types
         """
         self.cursor.execute(f'PRAGMA table_info("{self.table_name}")')
         cols = self.cursor.fetchall()
@@ -181,8 +185,8 @@ class MojoSkel:
 
     def download_csv(self, session: requests.Session, url: str):
         """
-        Download the CSV from url and import into the sqlite database.
-        If a previous table exists, generate a diff.
+        Download the CSV from url and import into the sqlite database
+        If a previous table exists, generate a diff
 
         :param session: Requests session to use for download
         :param url: url of the csv to download
@@ -201,9 +205,9 @@ class MojoSkel:
 
     def import_csv(self, csv_path: Path):
         """
-        Import the passed CSV into the encrypted sqlite database.
+        Import the passed CSV into the encrypted sqlite database
 
-        :param csv_path: Path like path of csv file.
+        :param csv_path: Path like path of csv file
         """
         had_existing = self.table_exists()
         old_table = self.rename_old_table(had_existing)
@@ -219,9 +223,9 @@ class MojoSkel:
 
     def show_table(self, limit: int = 2):
         """
-        Print the first few rows of the table as dictionaries.
+        Print the first few rows of the table as dictionaries
 
-        :param limit: (optional) Number of rows to display. Defaults to 2.
+        :param limit: (optional) Number of rows to display. Defaults to 2
         """
         if self.table_exists():
             self.cursor.execute(f'SELECT * FROM "{self.table_name}" LIMIT ?', (limit,))
@@ -236,7 +240,7 @@ class MojoSkel:
 
     def count(self) -> int:
         """
-        :return: count of the number of rows in the table, or 0 if no table.
+        :return: count of the number of rows in the table, or 0 if no table
         """
         if self.table_exists():
             self.cursor.execute(f'SELECT COUNT(*) FROM "{self.table_name}"')
@@ -249,12 +253,12 @@ class MojoSkel:
         self, entry_name: str, entry_value: str, only_one: bool = True
     ) -> Union[sqlite3.Row, List[sqlite3.Row], None]:
         """
-        Retrieve a single row matching column = value (case-insensitive).
+        Retrieve a single row matching column = value (case-insensitive)
 
-        :param entry_name: Column name to filter by.
-        :param entry_value: Value to match.
-        :param only_one: If True (default), return the first matching row.
-                If False, return a list of all matching rows.
+        :param entry_name: Column name to filter by
+        :param entry_value: Value to match
+        :param only_one: If True (default), return the first matching row
+                If False, return a list of all matching rows
 
         :return:
             - If only_one=True → a single sqlite3.Row or None
@@ -268,11 +272,11 @@ class MojoSkel:
         self, match_dict: dict, only_one: bool = True
     ) -> Union[sqlite3.Row, List[sqlite3.Row], None]:
         """
-        Retrieve one or many rows matching multiple column=value pairs.
+        Retrieve one or many rows matching multiple column=value pairs
 
-        :param match_dict: Dictionary of column names and values to match.
-        :param only_one: If True (default), return the first matching row.
-                        If False, return a list of all matching rows.
+        :param match_dict: Dictionary of column names and values to match
+        :param only_one: If True (default), return the first matching row
+                        If False, return a list of all matching rows
 
         :return:
             - If only_one=True → a single sqlite3.Row or None
