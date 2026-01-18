@@ -8,7 +8,7 @@ It includes helper methods for working with SQLite databases.
 from dataclasses import make_dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Union, List
+from typing import Any, Iterator, List, Type, Union
 
 import requests
 
@@ -69,7 +69,7 @@ class MojoSkel:
         else:
             self.row_class = None
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Any]:
         """
         Allow iterating over the class, by outputing all members.
         """
@@ -77,7 +77,12 @@ class MojoSkel:
             raise RuntimeError("Table not loaded yet — no dataclass available")
         return self._iter_rows()
 
-    def _row_to_obj(self, row):
+    def _row_to_obj(self, row: sqlite3.Row) -> Type[Any]:
+        """
+        Convert an sqlite3 row into a dataclass object
+
+        :param row: The sqlite3 row to convert
+        """
         row_dict = dict(row)
 
         # Convert REAL → Decimal (including numeric strings)
@@ -92,7 +97,7 @@ class MojoSkel:
 
         return self.row_class(**row_dict)
 
-    def _iter_rows(self):
+    def _iter_rows(self) -> Iterator[Any]:
         """
         Iterate over table rows and yield dynamically-created dataclass objects.
         Converts REAL columns to Decimal automatically.
@@ -106,7 +111,7 @@ class MojoSkel:
         for row in cur.fetchall():
             yield self._row_to_obj(row)
 
-    def _build_dataclass_from_table(self):
+    def _build_dataclass_from_table(self) -> Type[Any]:
         """
         Dynamically create a dataclass from the table schema.
         INTEGER → int
@@ -136,11 +141,13 @@ class MojoSkel:
 
         return make_dataclass(f"{self.table_name}_Row", fields)
 
-    def rename_old_table(self, existing: bool):
+    def rename_old_table(self, existing: bool) -> str:
         """
         If there was an exising table rename for comparison
 
         :param existing: bool for table exists
+
+        :return: the old table name
         """
         old_table = f"{self.table_name}_old"
         self.conn.execute(f"DROP TABLE IF EXISTS {old_table}")

@@ -6,7 +6,6 @@ import csv
 import pytest
 from memberjojo import Member
 
-
 # conftest.py or at top of test file
 SAMPLE_MEMBERS = [
     {
