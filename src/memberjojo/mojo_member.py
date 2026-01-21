@@ -7,6 +7,7 @@ stores it in SQLite, and provides helper functions for member lookups
 
 from difflib import get_close_matches
 from pathlib import Path
+from pprint import pprint
 from typing import Optional
 from .mojo_common import MojoSkel
 
@@ -83,6 +84,12 @@ class Member(MojoSkel):
         """
         self.cursor.execute(sql, (first_name, last_name))
         result = self.cursor.fetchone()
+        if self.debug:
+            print("Sql:")
+            pprint(sql)
+            print(f"First Name: {first_name} Last Name: {last_name}")
+            print("Result:")
+            pprint(result[0])
 
         if not result and found_error:
             raise ValueError(

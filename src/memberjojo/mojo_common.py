@@ -8,6 +8,7 @@ It includes helper methods for working with SQLite databases
 from dataclasses import make_dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from pprint import pprint
 from typing import Any, Iterator, List, Type, Union
 
 import requests
@@ -46,6 +47,7 @@ class MojoSkel:
         self.db_path = db_path
         self.table_name = table_name
         self.db_key = db_key
+        self.debug = False
 
         # Open connection
         self.conn = sqlite3.connect(self.db_path)  # pylint: disable=no-member
@@ -289,7 +291,7 @@ class MojoSkel:
             if val is None or val == "":
                 conditions.append(f'"{col}" IS NULL')
             elif isinstance(val, Like):
-                conditions.append(f'"{col}" LIKE ?')
+                conditions.append(f'LOWER("{col}") LIKE LOWER(?)')
                 values.append(val.pattern)
             elif isinstance(val, (tuple, list)) and len(val) == 2:
                 lower, upper = val
@@ -317,6 +319,9 @@ class MojoSkel:
         base_query = (
             f'SELECT * FROM "{self.table_name}" WHERE {" AND ".join(conditions)}'
         )
+        if self.debug:
+            print("Sql:")
+            pprint(base_query)
 
         if only_one:
             query = base_query + " LIMIT 1"
