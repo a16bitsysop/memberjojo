@@ -10,3 +10,5 @@ except ModuleNotFoundError:
 
 from .mojo_member import Member
 from .mojo_transaction import Transaction
+from .download import Download
+from .url import URL

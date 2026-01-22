@@ -125,6 +125,8 @@ class MojoSkel:
         TEXT → str
 
         :return: A dataclass built from the table columns and types
+
+        :raises ValueError: If no table
         """
         self.cursor.execute(f'PRAGMA table_info("{self.table_name}")')
         cols = self.cursor.fetchall()
