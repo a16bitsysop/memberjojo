@@ -15,6 +15,12 @@ class Download:
     """A class for managing Membermojo downloads"""
 
     def __init__(self, shortname: str, cookie_jar: MozillaCookieJar):
+        """
+        Initialise the class
+
+        :param shortname: the membermojo shortname
+        :param cookie_jar: a MozillaCookieJar with the session cookie, or empty to get one
+        """
         self.url = URL(shortname)
         self.cookie_jar = cookie_jar
         self.session = requests.Session()
@@ -34,7 +40,7 @@ class Download:
 
     def mojo_login(self, login_data: dict, email_verify: bool = False):
         """
-        Login to membermojo
+        Login to membermojo, cookie jar should be saved afterwards with updated cookie
 
         :param login_data: a dict containing email and password for requests
         :param email_verify: if True membermojo email verification will be triggered
