@@ -3,18 +3,9 @@
 CSV diff tests for the Member class
 """
 
-import csv
-from pathlib import Path
-
 from memberjojo.mojo_common import MojoSkel
 
-
-def write_csv(path: Path, rows: list[dict]):
-    """Utility: write CSV with DictWriter."""
-    with path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=rows[0].keys())
-        writer.writeheader()
-        writer.writerows(rows)
+from .utils import write_csv
 
 
 def test_import_new_csv_generates_diff(tmp_path, capsys):
