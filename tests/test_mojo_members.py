@@ -25,6 +25,7 @@ def mock_csv_file(tmp_path):
         "Title",
         "First name",
         "Last name",
+        "Membership",
         "membermojo ID",
         "Short URL",
         "Active Member",
@@ -36,6 +37,7 @@ def mock_csv_file(tmp_path):
             "Title": "Mr",
             "First name": "John",
             "Last name": "Doe",
+            "Membership": "Full",
             "membermojo ID": "1001",
             "Short URL": "http://short.url/johndoe",
             "Active Member": "yes",
@@ -46,6 +48,7 @@ def mock_csv_file(tmp_path):
             "Title": "Ms",
             "First name": "Jane",
             "Last name": "Smith",
+            "Membership": "Full",
             "membermojo ID": "1002",
             "Short URL": "http://short.url/janesmith",
             "Active Member": "no",
@@ -56,6 +59,7 @@ def mock_csv_file(tmp_path):
             "Title": "Dr",
             "First name": "Emily",
             "Last name": "Stone",
+            "Membership": "Full",
             "membermojo ID": "1001",
             "Short URL": "http://short.url/emilystone",
             "Active Member": "yes",
@@ -66,6 +70,7 @@ def mock_csv_file(tmp_path):
             "Title": "Mrs",
             "First name": "Sara",
             "Last name": "Connor",
+            "Membership": "Half",
             "membermojo ID": "1003",
             "Short URL": "http://short.url/saraconnor",
             "Active Member": "no",
@@ -76,6 +81,7 @@ def mock_csv_file(tmp_path):
             "Title": "Sir",
             "First name": "Rick",
             "Last name": "Grimes",
+            "Membership": "Half",
             "membermojo ID": "1004",
             "Short URL": "http://short.url/rickgrimes",
             "Active Member": "yes",
@@ -267,3 +273,11 @@ def test_get_fuzz_name_raises_value_error_when_no_match_and_found_error_true(mem
         match=r"❌ Cannot find xyz123notfound in member database with fuzzy match\.",
     ):
         member_db.get_fuzz_name("xyz123notfound", found_error=True)
+
+
+def test_member_count(member_db):
+    """
+    Test member_type_count returns the correct value
+    """
+    assert member_db.member_type_count("half") == 2
+    assert member_db.member_type_count("noop") == 0

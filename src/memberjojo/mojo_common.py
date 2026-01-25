@@ -187,38 +187,57 @@ class MojoSkel:
             # Cleanup old table (always)
             self.conn.execute(f"DROP TABLE {old_table}")
 
-    def download_csv(self, session: requests.Session, url: str):
+    def download_csv(self, session: requests.Session, url: str, merge: bool = False):
         """
         Download the CSV from url and import into the sqlite database
         If a previous table exists, generate a diff
 
         :param session: Requests session to use for download
         :param url: url of the csv to download
+        :param merge: (optional) If True, merge into existing table. Defaults to False.
         """
-        had_existing = self.table_exists()
-        old_table = self.rename_old_table(had_existing)
+        had_existing = False
+        old_table = ""
+
+        if not merge:
+            had_existing = self.table_exists()
+            old_table = self.rename_old_table(had_existing)
 
         # Download CSV as new table
-        mojo_loader.download_csv_helper(self.conn, self.table_name, url, session)
+        mojo_loader.download_csv_helper(
+            self.conn, self.table_name, url, session, merge=merge
+        )
         self.row_class = self._build_dataclass_from_table()
+
+        if merge:
+            return
 
         if not had_existing:
             return
 
         self.print_diff(old_table)
 
-    def import_csv(self, csv_path: Path):
+    def import_csv(self, csv_path: Path, merge: bool = False):
         """
         Import the passed CSV into the encrypted sqlite database
 
         :param csv_path: Path like path of csv file
+        :param merge: (optional) If True, merge into existing table. Defaults to False.
+            Form importing current, and expired members as headings are the same.
         """
-        had_existing = self.table_exists()
-        old_table = self.rename_old_table(had_existing)
+        had_existing = False
+        old_table = ""
+
+        if not merge:
+            had_existing = self.table_exists()
+            old_table = self.rename_old_table(had_existing)
 
         # Import CSV as new table
-        mojo_loader.import_csv_helper(self.conn, self.table_name, csv_path)
+        mojo_loader.import_csv_helper(self.conn, self.table_name, csv_path, merge=merge)
         self.row_class = self._build_dataclass_from_table()
+
+        if merge:
+            return
 
         if not had_existing:
             return
@@ -257,7 +276,7 @@ class MojoSkel:
         self, entry_name: str, entry_value: str, only_one: bool = True
     ) -> Union[sqlite3.Row, List[sqlite3.Row], None]:
         """
-        Retrieve a single row matching column = value (case-insensitive)
+        Retrieve a single or multiple rows matching column = value (case-insensitive)
 
         :param entry_name: Column name to filter by
         :param entry_value: Value to match
@@ -335,12 +354,32 @@ class MojoSkel:
         self.cursor.execute(base_query, values)
         return [self._row_to_obj(row) for row in self.cursor.fetchall()]
 
+    def run_count_query(self, sql: str, params: tuple):
+        """
+        Generate whole sql query for running on db table for counting and run
+
+        :param sql: the sqlite query for matching rows
+        :param params: the paramaters to use for the query
+        """
+        sql_query = f"SELECT count (*) FROM {self.table_name} {sql}"
+        cursor = self.cursor.execute(sql_query, params)
+        return cursor.fetchone()[0]
+
+    def member_type_count(self, membership_type: str):
+        """
+        Count members by membership type string
+
+        :param membership_type: the string to match, can use percent to match
+            remaining or preceeding text
+                - Full (match only Full)
+                - Full% (match Full and any words after)
+                - %Full% ( match Full in the middle)
+        """
+        query = "WHERE membership LIKE ?"
+        return self.run_count_query(query, (f"{membership_type}",))
+
     def table_exists(self) -> bool:
         """
         Return True or False if a table exists
         """
-        self.cursor.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1;",
-            (self.table_name,),
-        )
-        return self.cursor.fetchone() is not None
+        return mojo_loader.table_exists(self.cursor, self.table_name)

@@ -125,28 +125,45 @@ def _create_table_from_columns(table_name: str, columns: dict[str, str]) -> str:
     )
 
 
+def table_exists(cursor, table_name: str) -> bool:
+    """
+    Return True or False if a table exists
+
+    :param cursor: SQLite cursor of db to find table in
+    :param table_name: name of the table to check existance of
+
+    :return: bool of existence
+    """
+    cursor.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1;",
+        (table_name,),
+    )
+    return cursor.fetchone() is not None
+
+
 # -----------------------
 # CSV Import
 # -----------------------
 
 
-def import_data(conn, table_name: str, reader: DictReader):
+def import_data(conn, table_name: str, reader: DictReader, merge: bool = False):
     """
     Import data in the DictReader into the SQLite3 database at conn
 
     :param conn: SQLite database connection to use
     :param table_name: Name of the table to import into
     :param reader: A Dictreader object to import from
+    :param merge: (optional) If True, merge into existing table. Defaults to False.
     """
-    inferred_cols = infer_columns_from_rows(reader)
 
     cursor = conn.cursor()
-    # Drop existing table
-    cursor.execute(f'DROP TABLE IF EXISTS "{table_name}";')
-
-    # Create table
-    create_sql = _create_table_from_columns(table_name, inferred_cols)
-    cursor.execute(create_sql)
+    if not merge or not table_exists(cursor, table_name):
+        # Drop existing table
+        cursor.execute(f'DROP TABLE IF EXISTS "{table_name}";')
+        inferred_cols = infer_columns_from_rows(reader)
+        # Create table
+        create_sql = _create_table_from_columns(table_name, inferred_cols)
+        cursor.execute(create_sql)
 
     # Insert rows
     cols = list(reader[0].keys())
@@ -163,7 +180,7 @@ def import_data(conn, table_name: str, reader: DictReader):
     conn.commit()
 
 
-def import_csv_helper(conn, table_name: str, csv_path: Path):
+def import_csv_helper(conn, table_name: str, csv_path: Path, merge: bool = False):
     """
     Import CSV into database using given cursor
     Column types inferred automatically
@@ -171,6 +188,7 @@ def import_csv_helper(conn, table_name: str, csv_path: Path):
     :param conn: SQLite database connection to use
     :param table_name: Table to import the CSV into
     :param csv_path: Path like path of the CSV file to import
+    :param merge: (optional) If True, merge into existing table. Defaults to False.
     """
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV file not found: {csv_path}")
@@ -180,7 +198,7 @@ def import_csv_helper(conn, table_name: str, csv_path: Path):
         reader = list(DictReader(f))
         if not reader:
             raise ValueError("CSV file is empty.")
-        import_data(conn, table_name, reader)
+        import_data(conn, table_name, reader, merge=merge)
 
 
 # -----------------------
@@ -350,7 +368,7 @@ def _generate_sql_diff(
 
 
 def download_csv_helper(
-    conn, table_name: str, url: str, session: requests.Session
+    conn, table_name: str, url: str, session: requests.Session, merge: bool = False
 ) -> IO[str]:
     """
     Download url into a StringIO file object using streaming
@@ -360,9 +378,10 @@ def download_csv_helper(
     :param table_name: The name of the table to import it into
     :param url: URL of the csv to download
     :param session: A requests session to use for the download
+    :param merge: (optional) If True, merge into existing table. Defaults to False.
     """
 
-    print(f"Downloading from: {url}")
+    print(f"☁️ Downloading from: {url}")
 
     # Enable streaming
     with session.get(url, stream=True) as resp:
@@ -381,4 +400,4 @@ def download_csv_helper(
         string_buffer.seek(0)
 
         print(f"✅ Downloaded with encoding {resp.encoding}.")
-        import_data(conn, table_name, list(DictReader(string_buffer)))
+        import_data(conn, table_name, list(DictReader(string_buffer)), merge=merge)
