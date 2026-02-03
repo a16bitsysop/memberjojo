@@ -29,18 +29,21 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Detect package path
+        id: pkg
+        uses: actions/pyproject-info
+
       - name: 💾 Download _version.py
         uses: actions/download-artifact@v6
         with:
           name: version.py
-          path: src/memberjojo/
+          path: ${{ steps.pkg.outputs.path }}
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-        if: ${{ github.event_name == 'workflow_run' }}
 
       - name: Install docs dependencies
         run: |
-          pip install ".[docs]"
+          pip install -e ".[docs]"
 
       - name: Build Sphinx
         run: sphinx-build -b html docs/source docs/_build/html
@@ -65,3 +68,4 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        

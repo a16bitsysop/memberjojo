@@ -33,7 +33,6 @@ docs = [
 ]
 
 [tool.flit.sdist]
-exclude = ["**/.DS_Store"]
 include = ["tests", "src/memberjojo/_version.py"]
 
 [tool.setuptools_scm]
