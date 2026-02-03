@@ -1,3 +1,5 @@
+3.1:
+  * fix github pages workflow creation
 3.0:
   * return a dataclass instead of an sqlite3 row in functions that return rows
   * get_fuzz_name to member class to get fuzzy matched names
