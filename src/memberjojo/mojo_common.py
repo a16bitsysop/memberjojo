@@ -365,19 +365,6 @@ class MojoSkel:
         cursor = self.cursor.execute(sql_query, params)
         return cursor.fetchone()[0]
 
-    def member_type_count(self, membership_type: str):
-        """
-        Count members by membership type string
-
-        :param membership_type: the string to match, can use percent to match
-            remaining or preceeding text
-                - Full (match only Full)
-                - Full% (match Full and any words after)
-                - %Full% ( match Full in the middle)
-        """
-        query = "WHERE membership LIKE ?"
-        return self.run_count_query(query, (f"{membership_type}",))
-
     def table_exists(self) -> bool:
         """
         Return True or False if a table exists
