@@ -50,10 +50,3 @@ jobs:
         uses: DavidAnson/markdownlint-cli2-action@v22
         with:
           globs: '**/*.md'
-
-      - name: 💾 Store _version.py
-        uses: actions/upload-artifact@v6
-        with:
-          name: version.py
-          path: src/memberjojo/_version.py
-

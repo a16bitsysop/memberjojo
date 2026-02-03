@@ -4,6 +4,7 @@
   * add get_bool function to member class to return True of False for yes/no fields on membermojo
   * add download_csv to the base class to download a csv from a url directly into a db
   * allow merge of csv's for merging back expired members for processing
+  * allowing using non encrypted SQLite3 so csv can be downloaded into `:memory:`
   * add sql_query.py with dataclasses for sqlite row matching
   * switch to new GitHub pages workflow
 2.2:
