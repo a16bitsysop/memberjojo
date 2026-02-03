@@ -33,6 +33,10 @@ jobs:
         id: pkg
         uses: a16bitsysop/pyproject-info@main
 
+      - name: Install docs dependencies
+        run: |
+          pip install ".[docs]"
+
       - name: 💾 Download _version.py
         uses: actions/download-artifact@v6
         with:
@@ -40,10 +44,6 @@ jobs:
           path: ${{ steps.pkg.outputs.path }}
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install docs dependencies
-        run: |
-          pip install -e ".[docs]"
 
       - name: Build Sphinx
         run: sphinx-build -b html docs/source docs/_build/html
