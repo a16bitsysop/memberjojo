@@ -24,7 +24,7 @@ jobs:
       with:
         python-version: "3.x"
 
-    - name: Detect package path
+    - name: ⚙️ Detect package path
       id: pkg
       uses: a16bitsysop/pyproject-info@main
 
