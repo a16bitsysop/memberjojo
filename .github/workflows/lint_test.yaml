@@ -9,10 +9,6 @@ jobs:
   lint_pytest:
     runs-on: ubuntu-latest
 
-    # Prevent double runs:
-    # - Run push jobs only when the push is *not* part of a PR
-    if: github.event_name != 'push' || github.event.pull_request == null
-
     steps:
       - name: 📥 Checkout repository
         uses: actions/checkout@v6
