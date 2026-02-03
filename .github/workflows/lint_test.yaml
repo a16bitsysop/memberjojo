@@ -51,3 +51,9 @@ jobs:
         with:
           globs: '**/*.md'
 
+      - name: 💾 Store _version.py
+        uses: actions/upload-artifact@v6
+        with:
+          name: version.py
+          path: src/memberjojo/_version.py
+
