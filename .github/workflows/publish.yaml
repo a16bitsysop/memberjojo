@@ -1,4 +1,4 @@
-name: Publish to PyPI and gh pages
+name: Publish to PyPI
 
 on:
   push:
@@ -20,9 +20,6 @@ jobs:
       uses: actions/setup-python@v6
       with:
         python-version: "3.x"
-
-    - name: 🛠️ Install  libsqlcipher for sqlcipher3
-      run: sudo apt-get --no-install-recommends --no-install-suggests install libsqlcipher-dev
 
     - name: 🛠️ Install pypa/build
       run: >-
@@ -60,7 +57,7 @@ jobs:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
     steps:
 
-    - name: 💾 Download all the dists
+    - name: 💾 Download the dist
       uses: actions/download-artifact@v7
       with:
         name: python-package-distributions
@@ -84,7 +81,7 @@ jobs:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
 
     steps:
-    - name: 💾 Download all the dists
+    - name: 💾 Download the dist
       uses: actions/download-artifact@v7
       with:
         name: python-package-distributions
@@ -94,43 +91,3 @@ jobs:
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         repository-url: https://test.pypi.org/legacy/
-
-  docs:
-    if: startsWith(github.ref, 'refs/tags/')
-    name: Build & Deploy Docs
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write  # needed for GitHub Pages deploy
-
-    steps:
-      - name: 📥 Checkout code
-        uses: actions/checkout@v6
-
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.x'
-
-      - name: 🛠️ Install  libsqlcipher for sqlcipher3
-        run: sudo apt-get --no-install-recommends --no-install-suggests install libsqlcipher-dev
-
-      - name: 🛠️ Install dependencies
-        run: |
-          pip install ".[docs]"
-
-      - name: 💾 Load _version.py
-        uses: actions/download-artifact@v7
-        with:
-          name: version.py
-
-      - name: 📚 Build Sphinx documentation
-        run: sphinx-build -b html docs/source docs/_build/html
-
-      - name: 🚀 Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/_build/html
-          publish_branch: gh-pages
-          

@@ -50,4 +50,3 @@ jobs:
         uses: DavidAnson/markdownlint-cli2-action@v22
         with:
           globs: '**/*.md'
-

@@ -63,6 +63,19 @@ class Member(MojoSkel):
         value = row[0]
         return str(value).lower() == "yes"
 
+    def member_type_count(self, membership_type: str):
+        """
+        Count members by membership type string
+
+        :param membership_type: the string to match, can use percent to match
+            remaining or preceeding text
+                - Full (match only Full)
+                - Full% (match Full and any words after)
+                - %Full% ( match Full in the middle)
+        """
+        query = "WHERE membership LIKE ?"
+        return self.run_count_query(query, (f"{membership_type}",))
+
     def get_number_first_last(
         self, first_name: str, last_name: str, found_error: bool = False
     ) -> Optional[int]:
