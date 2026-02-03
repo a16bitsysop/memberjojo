@@ -354,12 +354,14 @@ class MojoSkel:
         self.cursor.execute(base_query, values)
         return [self._row_to_obj(row) for row in self.cursor.fetchall()]
 
-    def run_count_query(self, sql: str, params: tuple):
+    def run_count_query(self, sql: str, params: tuple) -> int:
         """
         Generate whole sql query for running on db table for counting and run
 
         :param sql: the sqlite query for matching rows
         :param params: the paramaters to use for the query
+
+        :return: number of matching rows
         """
         sql_query = f"SELECT count (*) FROM {self.table_name} {sql}"
         cursor = self.cursor.execute(sql_query, params)

@@ -63,15 +63,18 @@ class Member(MojoSkel):
         value = row[0]
         return str(value).lower() == "yes"
 
-    def member_type_count(self, membership_type: str):
+    def member_type_count(self, membership_type: str) -> int:
         """
         Count members by membership type string
 
         :param membership_type: the string to match, can use percent to match
             remaining or preceeding text
+
                 - Full (match only Full)
                 - Full% (match Full and any words after)
                 - %Full% ( match Full in the middle)
+
+        :return: Number of members that are `membership_type`
         """
         query = "WHERE membership LIKE ?"
         return self.run_count_query(query, (f"{membership_type}",))
