@@ -31,7 +31,7 @@ jobs:
 
       - name: Detect package path
         id: pkg
-        uses: actions/pyproject-info
+        uses: actions/pyproject-info@v1
 
       - name: 💾 Download _version.py
         uses: actions/download-artifact@v6
