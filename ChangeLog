@@ -1,3 +1,5 @@
+3.2:
+  * handle empty csv in download_csv
 3.1:
   * fix github pages workflow creation
 3.0:
