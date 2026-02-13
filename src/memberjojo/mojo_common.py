@@ -204,9 +204,10 @@ class MojoSkel:
             old_table = self.rename_old_table(had_existing)
 
         # Download CSV as new table
-        mojo_loader.download_csv_helper(
+        if not mojo_loader.download_csv_helper(
             self.conn, self.table_name, url, session, merge=merge
-        )
+        ):
+            return
         self.row_class = self._build_dataclass_from_table()
 
         if merge:

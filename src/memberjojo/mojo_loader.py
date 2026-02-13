@@ -399,5 +399,11 @@ def download_csv_helper(
         # Reset pointer to the beginning for DictReader
         string_buffer.seek(0)
 
-        print(f"✅ Downloaded with encoding {resp.encoding}.")
-        import_data(conn, table_name, list(DictReader(string_buffer)), merge=merge)
+        reader = list(DictReader(string_buffer))
+        if reader:
+            print(f"✅ Downloaded with encoding {resp.encoding}.")
+            import_data(conn, table_name, reader, merge=merge)
+            return True
+
+    print("   ⚠️ CSV is empty ⚠️")
+    return False
