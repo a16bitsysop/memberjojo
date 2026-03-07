@@ -2,16 +2,14 @@
 Tests for the member module
 """
 
-from csv import DictWriter
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import pytest
 from memberjojo import Member
+from .utils import get_db_path, get_sample_members, setup_mock_csv
 
 # pylint: disable=redefined-outer-name
-# or pylint thinks fixtures are redined as function variables
-# --- Fixtures & Helpers ---
 
 
 @pytest.fixture
@@ -20,82 +18,46 @@ def mock_csv_file(tmp_path):
     Create a temporary mock CSV file for testing.
     Returns path to the CSV.
     """
-    fieldnames = [
-        "Member number",
-        "Title",
-        "First name",
-        "Last name",
-        "Membership",
-        "membermojo ID",
-        "Short URL",
-        "Active Member",
-        "Newsletter",
-    ]
-    rows = [
-        {
-            "Member number": "1",
-            "Title": "Mr",
-            "First name": "John",
-            "Last name": "Doe",
-            "Membership": "Full",
-            "membermojo ID": "1001",
-            "Short URL": "http://short.url/johndoe",
-            "Active Member": "yes",
-            "Newsletter": "no",
-        },
-        {
-            "Member number": "2",
-            "Title": "Ms",
-            "First name": "Jane",
-            "Last name": "Smith",
-            "Membership": "Full",
-            "membermojo ID": "1002",
-            "Short URL": "http://short.url/janesmith",
-            "Active Member": "no",
-            "Newsletter": "yes",
-        },
-        {
-            "Member number": "3",
-            "Title": "Dr",
-            "First name": "Emily",
-            "Last name": "Stone",
-            "Membership": "Full",
-            "membermojo ID": "1001",
-            "Short URL": "http://short.url/emilystone",
-            "Active Member": "yes",
-            "Newsletter": "yes",
-        },  # duplicate ID
-        {
-            "Member number": "4",
-            "Title": "Mrs",
-            "First name": "Sara",
-            "Last name": "Connor",
-            "Membership": "Half",
-            "membermojo ID": "1003",
-            "Short URL": "http://short.url/saraconnor",
-            "Active Member": "no",
-            "Newsletter": "no",
-        },  # duplicate number
-        {
-            "Member number": "5",
-            "Title": "Sir",
-            "First name": "Rick",
-            "Last name": "Grimes",
-            "Membership": "Half",
-            "membermojo ID": "1004",
-            "Short URL": "http://short.url/rickgrimes",
-            "Active Member": "yes",
-            "Newsletter": "no",
-        },  # invalid title
-    ]
-
-    csv_path = tmp_path / "mock_data.csv"
-    with csv_path.open(mode="w", encoding="ISO-8859-1", newline="") as f:
-        writer = DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-    return Path(csv_path)
+    # Use standard sample but add a few extra to maintain test coverage
+    rows = get_sample_members()
+    rows.extend(
+        [
+            {
+                "Member number": "3",
+                "Title": "Dr",
+                "First name": "Emily",
+                "Last name": "Stone",
+                "Membership": "Full",
+                "membermojo ID": "1001",
+                "Short URL": "http://short.url/emilystone",
+                "Active Member": "yes",
+                "Newsletter": "yes",
+            },
+            {
+                "Member number": "4",
+                "Title": "Mrs",
+                "First name": "Sara",
+                "Last name": "Connor",
+                "Membership": "Half",
+                "membermojo ID": "1003",
+                "Short URL": "http://short.url/saraconnor",
+                "Active Member": "no",
+                "Newsletter": "no",
+            },
+            {
+                "Member number": "5",
+                "Title": "Sir",
+                "First name": "Rick",
+                "Last name": "Grimes",
+                "Membership": "Half",
+                "membermojo ID": "1004",
+                "Short URL": "http://short.url/rickgrimes",
+                "Active Member": "yes",
+                "Newsletter": "no",
+            },
+        ]
+    )
+    return setup_mock_csv(tmp_path, "mock_data.csv", rows)
 
 
 @pytest.fixture
@@ -103,10 +65,7 @@ def db_path():
     """
     Temp file for db connection
     """
-    with NamedTemporaryFile(suffix=".db", delete=False) as tmp:
-        path = Path(tmp.name)
-    yield path
-    path.unlink()
+    yield from get_db_path()
 
 
 @pytest.fixture

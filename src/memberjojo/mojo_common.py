@@ -6,6 +6,7 @@ It includes helper methods for working with SQLite databases
 """
 
 from dataclasses import make_dataclass
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from pprint import pprint
@@ -89,14 +90,30 @@ class MojoSkel:
         """
         row_dict = dict(row)
 
-        # Convert REAL → Decimal (including numeric strings)
-        for k, v in row_dict.items():
-            if isinstance(v, float):
-                row_dict[k] = Decimal(str(v))
-            elif isinstance(v, str):
-                try:
-                    row_dict[k] = Decimal(v)
-                except InvalidOperation:
+        # Convert types based on dataclass field types
+        for field in self.row_class.__dataclass_fields__.values():
+            k = field.name
+            v = row_dict.get(k)
+            if v is None:
+                continue
+
+            if field.type == Decimal:
+                if isinstance(v, float):
+                    row_dict[k] = Decimal(str(v))
+                elif isinstance(v, str):
+                    try:
+                        row_dict[k] = Decimal(v)
+                    except InvalidOperation:
+                        pass
+            elif field.type == date and v is not None:
+                if isinstance(v, date):
+                    continue
+
+                dt = mojo_loader.parse_date(v)
+                if dt:
+                    row_dict[k] = dt.date()
+                else:
+                    # If we can't parse it, keep as original value
                     pass
 
         return self.row_class(**row_dict)
@@ -104,7 +121,7 @@ class MojoSkel:
     def _iter_rows(self) -> Iterator[Any]:
         """
         Iterate over table rows and yield dynamically-created dataclass objects
-        Converts REAL columns to Decimal automatically
+        Converts REAL columns to Decimal and DATE columns to date objects automatically
 
         :return: An interator of dataclass objects for rows
         """
@@ -122,6 +139,7 @@ class MojoSkel:
         Dynamically create a dataclass from the table schema
         INTEGER → int
         REAL → Decimal
+        DATE → date
         TEXT → str
 
         :return: A dataclass built from the table columns and types
@@ -137,11 +155,19 @@ class MojoSkel:
         fields = []
         for _cid, name, col_type, _notnull, _dflt, _pk in cols:
             t = col_type.upper()
+            norm_name = mojo_loader.normalize(name)
 
             if t.startswith("INT"):
                 py_type = int
             elif t.startswith("REAL") or t.startswith("NUM") or t.startswith("DEC"):
                 py_type = Decimal
+            elif t.startswith("DATE") or (
+                "date" in norm_name
+                and not any(x in norm_name for x in ("newsletter", "active", "status"))
+            ):
+                py_type = date
+            elif norm_name.endswith("_at") or norm_name.endswith("_since"):
+                py_type = date
             else:
                 py_type = str
 
