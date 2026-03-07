@@ -341,27 +341,40 @@ class MojoSkel:
             elif isinstance(val, Like):
                 conditions.append(f'LOWER("{col}") LIKE LOWER(?)')
                 values.append(val.pattern)
+            elif isinstance(val, DateRange):
+                conditions.append(f'"{col}" BETWEEN ? AND ?')
+                values.extend([val.start.isoformat(), val.end.isoformat()])
             elif isinstance(val, (tuple, list)) and len(val) == 2:
                 lower, upper = val
                 if lower is not None and upper is not None:
                     conditions.append(f'"{col}" BETWEEN ? AND ?')
-                    values.extend([lower, upper])
+                    values.extend(
+                        [
+                            x.isoformat() if isinstance(x, date) else x
+                            for x in (lower, upper)
+                        ]
+                    )
                 elif lower is not None:
                     conditions.append(f'"{col}" >= ?')
-                    values.append(lower)
+                    values.append(
+                        lower.isoformat() if isinstance(lower, date) else lower
+                    )
                 elif upper is not None:
                     conditions.append(f'"{col}" <= ?')
-                    values.append(upper)
+                    values.append(
+                        upper.isoformat() if isinstance(upper, date) else upper
+                    )
                 else:
                     # Both are None, effectively no condition on this column
                     pass
             else:
                 conditions.append(f'"{col}" = ?')
-                values.append(
-                    float(val.quantize(Decimal("0.01")))
-                    if isinstance(val, Decimal)
-                    else val
-                )
+                if isinstance(val, date):
+                    values.append(val.isoformat())
+                elif isinstance(val, Decimal):
+                    values.append(float(val.quantize(Decimal("0.01"))))
+                else:
+                    values.append(val)
 
         # Base query string
         base_query = (
