@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from pprint import pprint
-from typing import Any, Iterator, List, Type, Union
+from typing import Any, Iterator, List, Tuple, Type, Union
 
 import requests
 
@@ -24,7 +24,7 @@ except ImportError:
     HAS_SQLCIPHER = False
 
 from . import mojo_loader
-from .sql_query import Like
+from .sql_query import Like, DateRange
 
 
 class MojoSkel:
@@ -234,6 +234,7 @@ class MojoSkel:
             self.conn, self.table_name, url, session, merge=merge
         ):
             return
+
         self.row_class = self._build_dataclass_from_table()
 
         if merge:
@@ -318,19 +319,9 @@ class MojoSkel:
 
         return self.get_row_multi(match_dict, only_one)
 
-    def get_row_multi(
-        self, match_dict: dict, only_one: bool = True
-    ) -> Union[sqlite3.Row, List[sqlite3.Row], None]:
+    def _build_query_conditions(self, match_dict: dict) -> Tuple[List[str], List[Any]]:
         """
-        Retrieve one or many rows matching multiple column=value pairs
-
-        :param match_dict: Dictionary of column names and values to match
-        :param only_one: If True (default), return the first matching row
-                        If False, return a list of all matching rows
-
-        :return:
-            - If only_one=True → a single sqlite3.Row or None
-            - If only_one=False → list of sqlite3.Row (may be empty)
+        Build SQL WHERE conditions and values from match_dict
         """
         conditions = []
         values = []
@@ -345,36 +336,54 @@ class MojoSkel:
                 conditions.append(f'"{col}" BETWEEN ? AND ?')
                 values.extend([val.start.isoformat(), val.end.isoformat()])
             elif isinstance(val, (tuple, list)) and len(val) == 2:
-                lower, upper = val
-                if lower is not None and upper is not None:
-                    conditions.append(f'"{col}" BETWEEN ? AND ?')
-                    values.extend(
-                        [
-                            x.isoformat() if isinstance(x, date) else x
-                            for x in (lower, upper)
-                        ]
-                    )
-                elif lower is not None:
-                    conditions.append(f'"{col}" >= ?')
-                    values.append(
-                        lower.isoformat() if isinstance(lower, date) else lower
-                    )
-                elif upper is not None:
-                    conditions.append(f'"{col}" <= ?')
-                    values.append(
-                        upper.isoformat() if isinstance(upper, date) else upper
-                    )
-                else:
-                    # Both are None, effectively no condition on this column
-                    pass
+                self._add_range_condition(col, val, conditions, values)
             else:
-                conditions.append(f'"{col}" = ?')
-                if isinstance(val, date):
-                    values.append(val.isoformat())
-                elif isinstance(val, Decimal):
-                    values.append(float(val.quantize(Decimal("0.01"))))
-                else:
-                    values.append(val)
+                self._add_equality_condition(col, val, conditions, values)
+        return conditions, values
+
+    def _add_range_condition(self, col, val, conditions, values):
+        """Helper for range conditions"""
+        lower, upper = val
+        if lower is not None and upper is not None:
+            conditions.append(f'"{col}" BETWEEN ? AND ?')
+            values.extend(
+                [x.isoformat() if isinstance(x, date) else x for x in (lower, upper)]
+            )
+        elif lower is not None:
+            conditions.append(f'"{col}" >= ?')
+            values.append(lower.isoformat() if isinstance(lower, date) else lower)
+        elif upper is not None:
+            conditions.append(f'"{col}" <= ?')
+            values.append(upper.isoformat() if isinstance(upper, date) else upper)
+
+    def _add_equality_condition(self, col, val, conditions, values):
+        """Helper for equality conditions"""
+        conditions.append(f'"{col}" = ?')
+        if isinstance(val, date):
+            values.append(val.isoformat())
+        elif isinstance(val, Decimal):
+            values.append(float(val.quantize(Decimal("0.01"))))
+        else:
+            values.append(val)
+
+    def get_row_multi(
+        self, match_dict: dict, only_one: bool = True
+    ) -> Union[sqlite3.Row, List[sqlite3.Row], None]:
+        """
+        Retrieve one or many rows matching multiple column=value pairs
+
+        :param match_dict: Dictionary of column names and values to match
+        :param only_one: If True (default), return the first matching row
+                        If False, return a list of all matching rows
+
+        :return:
+            - If only_one=True → a single sqlite3.Row or None
+            - If only_one=False → list of sqlite3.Row (may be empty)
+        """
+        if not self.table_exists():
+            return None if only_one else []
+
+        conditions, values = self._build_query_conditions(match_dict)
 
         # Base query string
         base_query = (
