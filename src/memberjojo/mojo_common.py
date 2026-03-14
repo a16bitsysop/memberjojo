@@ -6,10 +6,11 @@ It includes helper methods for working with SQLite databases
 """
 
 from dataclasses import make_dataclass
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from pprint import pprint
-from typing import Any, Iterator, List, Type, Union
+from typing import Any, Iterator, List, Tuple, Type, Union
 
 import requests
 
@@ -23,7 +24,7 @@ except ImportError:
     HAS_SQLCIPHER = False
 
 from . import mojo_loader
-from .sql_query import Like
+from .sql_query import Like, DateRange
 
 
 class MojoSkel:
@@ -89,14 +90,30 @@ class MojoSkel:
         """
         row_dict = dict(row)
 
-        # Convert REAL → Decimal (including numeric strings)
-        for k, v in row_dict.items():
-            if isinstance(v, float):
-                row_dict[k] = Decimal(str(v))
-            elif isinstance(v, str):
-                try:
-                    row_dict[k] = Decimal(v)
-                except InvalidOperation:
+        # Convert types based on dataclass field types
+        for field in self.row_class.__dataclass_fields__.values():
+            k = field.name
+            v = row_dict.get(k)
+            if v is None:
+                continue
+
+            if field.type == Decimal:
+                if isinstance(v, float):
+                    row_dict[k] = Decimal(str(v))
+                elif isinstance(v, str):
+                    try:
+                        row_dict[k] = Decimal(v)
+                    except InvalidOperation:
+                        pass
+            elif field.type == date and v is not None:
+                if isinstance(v, date):
+                    continue
+
+                dt = mojo_loader.parse_date(v)
+                if dt:
+                    row_dict[k] = dt.date()
+                else:
+                    # If we can't parse it, keep as original value
                     pass
 
         return self.row_class(**row_dict)
@@ -104,7 +121,7 @@ class MojoSkel:
     def _iter_rows(self) -> Iterator[Any]:
         """
         Iterate over table rows and yield dynamically-created dataclass objects
-        Converts REAL columns to Decimal automatically
+        Converts REAL columns to Decimal and DATE columns to date objects automatically
 
         :return: An interator of dataclass objects for rows
         """
@@ -122,6 +139,7 @@ class MojoSkel:
         Dynamically create a dataclass from the table schema
         INTEGER → int
         REAL → Decimal
+        DATE → date
         TEXT → str
 
         :return: A dataclass built from the table columns and types
@@ -137,11 +155,19 @@ class MojoSkel:
         fields = []
         for _cid, name, col_type, _notnull, _dflt, _pk in cols:
             t = col_type.upper()
+            norm_name = mojo_loader.normalize(name)
 
             if t.startswith("INT"):
                 py_type = int
             elif t.startswith("REAL") or t.startswith("NUM") or t.startswith("DEC"):
                 py_type = Decimal
+            elif t.startswith("DATE") or (
+                "date" in norm_name
+                and not any(x in norm_name for x in ("newsletter", "active", "status"))
+            ):
+                py_type = date
+            elif norm_name.endswith("_at") or norm_name.endswith("_since"):
+                py_type = date
             else:
                 py_type = str
 
@@ -208,6 +234,7 @@ class MojoSkel:
             self.conn, self.table_name, url, session, merge=merge
         ):
             return
+
         self.row_class = self._build_dataclass_from_table()
 
         if merge:
@@ -292,6 +319,53 @@ class MojoSkel:
 
         return self.get_row_multi(match_dict, only_one)
 
+    def _build_query_conditions(self, match_dict: dict) -> Tuple[List[str], List[Any]]:
+        """
+        Build SQL WHERE conditions and values from match_dict
+        """
+        conditions = []
+        values = []
+
+        for col, val in match_dict.items():
+            if val is None or val == "":
+                conditions.append(f'"{col}" IS NULL')
+            elif isinstance(val, Like):
+                conditions.append(f'LOWER("{col}") LIKE LOWER(?)')
+                values.append(val.pattern)
+            elif isinstance(val, DateRange):
+                conditions.append(f'"{col}" BETWEEN ? AND ?')
+                values.extend([val.start.isoformat(), val.end.isoformat()])
+            elif isinstance(val, (tuple, list)) and len(val) == 2:
+                self._add_range_condition(col, val, conditions, values)
+            else:
+                self._add_equality_condition(col, val, conditions, values)
+        return conditions, values
+
+    def _add_range_condition(self, col, val, conditions, values):
+        """Helper for range conditions"""
+        lower, upper = val
+        if lower is not None and upper is not None:
+            conditions.append(f'"{col}" BETWEEN ? AND ?')
+            values.extend(
+                [x.isoformat() if isinstance(x, date) else x for x in (lower, upper)]
+            )
+        elif lower is not None:
+            conditions.append(f'"{col}" >= ?')
+            values.append(lower.isoformat() if isinstance(lower, date) else lower)
+        elif upper is not None:
+            conditions.append(f'"{col}" <= ?')
+            values.append(upper.isoformat() if isinstance(upper, date) else upper)
+
+    def _add_equality_condition(self, col, val, conditions, values):
+        """Helper for equality conditions"""
+        conditions.append(f'"{col}" = ?')
+        if isinstance(val, date):
+            values.append(val.isoformat())
+        elif isinstance(val, Decimal):
+            values.append(float(val.quantize(Decimal("0.01"))))
+        else:
+            values.append(val)
+
     def get_row_multi(
         self, match_dict: dict, only_one: bool = True
     ) -> Union[sqlite3.Row, List[sqlite3.Row], None]:
@@ -306,36 +380,10 @@ class MojoSkel:
             - If only_one=True → a single sqlite3.Row or None
             - If only_one=False → list of sqlite3.Row (may be empty)
         """
-        conditions = []
-        values = []
+        if not self.table_exists():
+            return None if only_one else []
 
-        for col, val in match_dict.items():
-            if val is None or val == "":
-                conditions.append(f'"{col}" IS NULL')
-            elif isinstance(val, Like):
-                conditions.append(f'LOWER("{col}") LIKE LOWER(?)')
-                values.append(val.pattern)
-            elif isinstance(val, (tuple, list)) and len(val) == 2:
-                lower, upper = val
-                if lower is not None and upper is not None:
-                    conditions.append(f'"{col}" BETWEEN ? AND ?')
-                    values.extend([lower, upper])
-                elif lower is not None:
-                    conditions.append(f'"{col}" >= ?')
-                    values.append(lower)
-                elif upper is not None:
-                    conditions.append(f'"{col}" <= ?')
-                    values.append(upper)
-                else:
-                    # Both are None, effectively no condition on this column
-                    pass
-            else:
-                conditions.append(f'"{col}" = ?')
-                values.append(
-                    float(val.quantize(Decimal("0.01")))
-                    if isinstance(val, Decimal)
-                    else val
-                )
+        conditions, values = self._build_query_conditions(match_dict)
 
         # Base query string
         base_query = (

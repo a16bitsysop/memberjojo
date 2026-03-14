@@ -5,7 +5,7 @@ Merge import tests for MojoSkel
 
 from memberjojo.mojo_common import MojoSkel
 
-from .utils import write_csv
+from .utils import write_csv, setup_mock_csv
 
 
 def test_import_merge_csv(tmp_path):
@@ -15,11 +15,10 @@ def test_import_merge_csv(tmp_path):
     """
 
     # 1. Original CSV
-    csv1 = tmp_path / "members1.csv"
     original_rows = [
         {"id": "1", "name": "Alice", "age": "30"},
     ]
-    write_csv(csv1, original_rows)
+    csv1 = setup_mock_csv(tmp_path, "members1.csv", original_rows)
 
     # Create DB
     db_path = tmp_path / "test_merge.db"

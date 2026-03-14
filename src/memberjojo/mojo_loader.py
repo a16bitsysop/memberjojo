@@ -6,6 +6,7 @@ Helper module for importing a CSV into a SQLite database
 from collections import defaultdict, Counter
 from csv import DictReader
 from dataclasses import dataclass
+from datetime import datetime
 from io import StringIO
 from pathlib import Path
 from typing import Any, IO, Tuple
@@ -34,7 +35,7 @@ class DiffRow:
 # -----------------------
 
 
-def _normalize(name: str) -> str:
+def normalize(name: str) -> str:
     """
     Normalize a column name: lowercase, remove symbols, convert to snake case
 
@@ -47,20 +48,58 @@ def _normalize(name: str) -> str:
     return name.strip("_")
 
 
+def parse_date(value: Any) -> datetime | None:
+    """
+    Try to parse a date string into a datetime object using various formats.
+    """
+    if not value or not isinstance(value, str):
+        return None
+    val_str = value.strip()
+    if not val_str:
+        return None
+
+    # Try ISO format first
+    try:
+        return datetime.fromisoformat(val_str)
+    except ValueError:
+        pass
+
+    # Try other common formats
+    for fmt in (
+        "%d/%m/%Y",
+        "%d.%m.%Y",
+        "%d-%m-%Y",
+        "%d %m %Y",
+        "%d/%m/%y",
+        "%d.%m.%y",
+        "%d-%m-%y",
+        "%d %m %y",
+    ):
+        try:
+            return datetime.strptime(val_str, fmt)
+        except ValueError:
+            pass
+    return None
+
+
 def _guess_type(value: any) -> str:
     """
-    Guess SQLite data type of a CSV value: 'INTEGER', 'REAL', or 'TEXT'
+    Guess SQLite data type of a CSV value: 'INTEGER', 'REAL', 'DATE', or 'TEXT'
 
     :param value: entry from sqlite database to guess the type of
 
-    :return: string of the type, TEXT, INTEGER, REAL
+    :return: string of the type, TEXT, INTEGER, REAL, DATE, or EMPTY
     """
     if value is None:
-        return "TEXT"
+        return "EMPTY"
     if isinstance(value, str):
         value = value.strip()
         if value == "":
-            return "TEXT"
+            return "EMPTY"
+
+        if parse_date(value):
+            return "DATE"
+
     try:
         int(value)
         return "INTEGER"
@@ -85,17 +124,22 @@ def infer_columns_from_rows(rows: list[dict]) -> dict[str, str]:
 
     for row in rows:
         for key, value in row.items():
-            norm_key = _normalize(key)
+            norm_key = normalize(key)
             type_counters[norm_key][_guess_type(value)] += 1
 
     inferred_cols = {}
     for col, counter in type_counters.items():
-        if counter["TEXT"] == 0:
-            if counter["REAL"] > 0:
-                inferred_cols[col] = "REAL"
-            else:
-                inferred_cols[col] = "INTEGER"
+        # If any value is TEXT, the whole column is TEXT
+        if counter["TEXT"] > 0:
+            inferred_cols[col] = "TEXT"
+        elif counter["REAL"] > 0:
+            inferred_cols[col] = "REAL"
+        elif counter["DATE"] > 0:
+            inferred_cols[col] = "DATE"
+        elif counter["INTEGER"] > 0:
+            inferred_cols[col] = "INTEGER"
         else:
+            # All values are EMPTY or there were no rows
             inferred_cols[col] = "TEXT"
     return inferred_cols
 
@@ -146,34 +190,54 @@ def table_exists(cursor, table_name: str) -> bool:
 # -----------------------
 
 
-def import_data(conn, table_name: str, reader: DictReader, merge: bool = False):
+def _process_row(row: dict, cols: list, norm_map: dict, inferred_cols: dict) -> list:
     """
-    Import data in the DictReader into the SQLite3 database at conn
+    Process a CSV row, converting dates and handling empty values.
+    """
+    values = []
+    for c in cols:
+        val = row[c]
+        if val == "" or val is None:
+            values.append(None)
+        elif inferred_cols.get(norm_map[c]) == "DATE":
+            dt = parse_date(val)
+            if dt:
+                values.append(dt.strftime("%Y-%m-%d"))
+            else:
+                values.append(val)
+        else:
+            values.append(val)
+    return values
+
+
+def import_data(conn, table_name: str, reader: list[dict], merge: bool = False):
+    """
+    Import data in the list of dicts into the SQLite3 database at conn
 
     :param conn: SQLite database connection to use
     :param table_name: Name of the table to import into
-    :param reader: A Dictreader object to import from
+    :param reader: A list of dict objects to import from
     :param merge: (optional) If True, merge into existing table. Defaults to False.
     """
 
     cursor = conn.cursor()
+    inferred_cols = infer_columns_from_rows(reader)
     if not merge or not table_exists(cursor, table_name):
         # Drop existing table
         cursor.execute(f'DROP TABLE IF EXISTS "{table_name}";')
-        inferred_cols = infer_columns_from_rows(reader)
         # Create table
         create_sql = _create_table_from_columns(table_name, inferred_cols)
         cursor.execute(create_sql)
 
     # Insert rows
     cols = list(reader[0].keys())
-    norm_map = {c: _normalize(c) for c in cols}
+    norm_map = {c: normalize(c) for c in cols}
     colnames = ",".join(f'"{norm_map[c]}"' for c in cols)
     placeholders = ",".join("?" for _ in cols)
     insert_sql = f'INSERT INTO "{table_name}" ({colnames}) VALUES ({placeholders})'
 
     for row in reader:
-        values = [row[c] if row[c] != "" else None for c in cols]
+        values = _process_row(row, cols, norm_map, inferred_cols)
         cursor.execute(insert_sql, values)
 
     cursor.close()
@@ -304,22 +368,30 @@ def _generate_sql_diff(
     :return: list of sqlite rows that are changed
     """
 
-    # Introspect schema (order-preserving)
-    cols_info = conn.execute(f"PRAGMA table_info({new_table})").fetchall()
+    # Introspect schemas (order-preserving)
+    cols_new = [
+        row[1] for row in conn.execute(f"PRAGMA table_info({new_table})").fetchall()
+    ]
+    cols_old = [
+        row[1] for row in conn.execute(f"PRAGMA table_info({old_table})").fetchall()
+    ]
 
-    if not cols_info:
+    if not cols_new:
         raise RuntimeError(f"Table {new_table!r} has no columns")
+    if not cols_old:
+        raise RuntimeError(f"Table {old_table!r} has no columns")
 
-    cols = [row[1] for row in cols_info]
+    # Use intersection for comparison and preview, preserving new_table order
+    common_cols = [c for c in cols_new if c in cols_old and c != "rowid"]
 
-    # Exclude rowid from consideration for key or data
-    main_cols = [c for c in cols if c != "rowid"]
+    if not common_cols:
+        raise RuntimeError(f"No common columns between {new_table} and {old_table}")
 
-    # First column is key, others are for comparison
-    key = main_cols[0]
-    non_key_cols = main_cols[1:]
+    # First column of common columns is key, others are for comparison
+    key = common_cols[0]
+    non_key_cols = common_cols[1:]
 
-    #  Preview columns (key first, then others for readability)
+    # Preview columns (key first, then others for readability)
     preview_cols = [key] + non_key_cols[:5]
 
     new_preview = ", ".join(f"n.{c}" for c in preview_cols)

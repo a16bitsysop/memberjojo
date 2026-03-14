@@ -3,9 +3,7 @@
 CSV diff tests for the Member class
 """
 
-from memberjojo.mojo_common import MojoSkel
-
-from .utils import write_csv
+from .utils import write_csv, setup_initial_db
 
 
 def test_import_new_csv_generates_diff(tmp_path, capsys):
@@ -14,24 +12,8 @@ def test_import_new_csv_generates_diff(tmp_path, capsys):
     and verify that the diff prints correctly.
     """
 
-    # -----------------------
-    # 1. Original CSV
-    # -----------------------
-    csv1 = tmp_path / "members1.csv"
-    original_rows = [
-        {"id": "1", "name": "Alice", "age": "30"},
-        {"id": "2", "name": "Bob", "age": "40"},
-    ]
-    write_csv(csv1, original_rows)
-
-    # Create DB
-    db_path = tmp_path / "test_members.db"
-    password = "Needs a Password"
-
-    # Load initial CSV
-    m = MojoSkel(str(db_path), password, "members")
-    m.import_csv(csv1)
-
+    # 1. Original CSV & DB
+    m, _ = setup_initial_db(tmp_path, "test_members.db", "Needs a Password")
     assert m.count() == 2
 
     # -----------------------

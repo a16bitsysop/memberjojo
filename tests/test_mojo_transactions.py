@@ -2,17 +2,12 @@
 Tests for the transaction module
 """
 
-import tempfile
-import csv
-from pathlib import Path
-
 import pytest
 from memberjojo import Transaction  # Update with your actual module name
 from memberjojo.mojo_loader import _guess_type as guess_type
+from .utils import get_db_path, get_sample_transactions, setup_mock_csv
 
 # pylint: disable=redefined-outer-name
-# or pylint thinks fixtures are redined as function variables
-# --- Fixtures & Helpers ---
 
 
 @pytest.fixture
@@ -20,19 +15,7 @@ def csv_file(tmp_path):
     """
     Temp csv file for testing
     """
-    path = tmp_path / "test_data.csv"
-    data = [
-        {"id": "1", "amount": "100.5", "desc": "Deposit"},
-        {"id": "2", "amount": "200", "desc": "Withdrawal"},
-        {"id": "3", "amount": "150", "desc": "Refund"},
-        {"id": "4", "amount": "175", "desc": None},
-        {"id": "5", "amount": "345", "desc": ""},
-    ]
-    with path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["id", "amount", "desc"])
-        writer.writeheader()
-        writer.writerows(data)
-    return Path(path)
+    return setup_mock_csv(tmp_path, "test_data.csv", get_sample_transactions())
 
 
 @pytest.fixture
@@ -40,10 +23,7 @@ def db_path():
     """
     Temp file for db connection
     """
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
-        path = Path(tmp.name)
-    yield path
-    path.unlink()
+    yield from get_db_path()
 
 
 @pytest.fixture
@@ -59,8 +39,8 @@ def payment_db(db_path, csv_file):
 @pytest.mark.parametrize(
     "input_value, expected",
     [
-        (None, "TEXT"),
-        ("", "TEXT"),
+        (None, "EMPTY"),
+        ("", "EMPTY"),
         ("abc", "TEXT"),
         ("123", "INTEGER"),
         ("123.45", "REAL"),

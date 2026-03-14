@@ -2,29 +2,12 @@
 Iteration tests for the Member class
 """
 
-import csv
 import pytest
 from memberjojo import Member
+from .utils import get_sample_members, setup_mock_csv
 
 # conftest.py or at top of test file
-SAMPLE_MEMBERS = [
-    {
-        "Member number": "11",
-        "Title": "Mr",
-        "First name": "Johnny",
-        "Last name": "Doe",
-        "membermojo ID": "8001",
-        "Short URL": "http://short.url/johnny",
-    },
-    {
-        "Member number": "12",
-        "Title": "Ms",
-        "First name": "Janice",
-        "Last name": "Smith",
-        "membermojo ID": "8002",
-        "Short URL": "http://short.url/janice",
-    },
-]
+SAMPLE_MEMBERS = get_sample_members()
 
 
 def test_member_iter(tmp_path):
@@ -32,13 +15,7 @@ def test_member_iter(tmp_path):
     Test for iterating over the member data.
     """
     # Prepare sample CSV data
-    sample_csv = tmp_path / "members.csv"
-
-    # Write CSV file
-    with sample_csv.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=SAMPLE_MEMBERS[0].keys())
-        writer.writeheader()
-        writer.writerows(SAMPLE_MEMBERS)
+    sample_csv = setup_mock_csv(tmp_path, "members.csv", SAMPLE_MEMBERS)
 
     # Create DB path
     db_path = tmp_path / "test_members.db"
@@ -92,12 +69,7 @@ def test_member_import_persist_and_reload(tmp_path):
     # ------------------------
     # 1. Prepare CSV test data
     # ------------------------
-    sample_csv = tmp_path / "members.csv"
-
-    with sample_csv.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=SAMPLE_MEMBERS[0].keys())
-        writer.writeheader()
-        writer.writerows(SAMPLE_MEMBERS)
+    sample_csv = setup_mock_csv(tmp_path, "members.csv", SAMPLE_MEMBERS)
 
     # ----------------------
     # 2. Import into database
