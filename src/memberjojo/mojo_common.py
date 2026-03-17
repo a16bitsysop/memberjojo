@@ -155,18 +155,12 @@ class MojoSkel:
         fields = []
         for _cid, name, col_type, _notnull, _dflt, _pk in cols:
             t = col_type.upper()
-            norm_name = mojo_loader.normalize(name)
 
             if t.startswith("INT"):
                 py_type = int
             elif t.startswith("REAL") or t.startswith("NUM") or t.startswith("DEC"):
                 py_type = Decimal
-            elif t.startswith("DATE") or (
-                "date" in norm_name
-                and not any(x in norm_name for x in ("newsletter", "active", "status"))
-            ):
-                py_type = date
-            elif norm_name.endswith("_at") or norm_name.endswith("_since"):
+            elif t.startswith("DATE"):
                 py_type = date
             else:
                 py_type = str

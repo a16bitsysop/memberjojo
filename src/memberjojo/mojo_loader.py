@@ -35,7 +35,7 @@ class DiffRow:
 # -----------------------
 
 
-def normalize(name: str) -> str:
+def _normalize(name: str) -> str:
     """
     Normalize a column name: lowercase, remove symbols, convert to snake case
 
@@ -124,7 +124,7 @@ def infer_columns_from_rows(rows: list[dict]) -> dict[str, str]:
 
     for row in rows:
         for key, value in row.items():
-            norm_key = normalize(key)
+            norm_key = _normalize(key)
             type_counters[norm_key][_guess_type(value)] += 1
 
     inferred_cols = {}
@@ -231,7 +231,7 @@ def import_data(conn, table_name: str, reader: list[dict], merge: bool = False):
 
     # Insert rows
     cols = list(reader[0].keys())
-    norm_map = {c: normalize(c) for c in cols}
+    norm_map = {c: _normalize(c) for c in cols}
     colnames = ",".join(f'"{norm_map[c]}"' for c in cols)
     placeholders = ",".join("?" for _ in cols)
     insert_sql = f'INSERT INTO "{table_name}" ({colnames}) VALUES ({placeholders})'
