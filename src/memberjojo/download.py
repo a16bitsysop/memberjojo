@@ -9,6 +9,8 @@ from pathlib import Path
 import requests
 
 from .url import URL
+from .mojo_member import Member
+from .mojo_transaction import Transaction
 
 
 class Download:
@@ -114,3 +116,48 @@ class Download:
         else:
             print(response.text)
             raise ValueError("❌ Failed to submit login form.")
+
+    def download_membermojo(
+        self,
+        member_db_path: str,
+        payments_db_path: str,
+        db_key: str,
+    ):
+        """
+        Download and link Membermojo data (current members and payments).
+
+        :param member_db_path: Path to the member SQLite database (can be :memory:)
+        :param payments_db_path: Path to the payments SQLite database (can be :memory:)
+        :param db_key: Key for encrypted databases
+        :return: A tuple of (Member instance, Transaction instance)
+        """
+
+        # Download Current Member Data
+        member_db = Member(member_db_path, db_key)
+        member_start = member_db.count()
+        member_db.download_csv(self.session, self.url.members())
+        member_added = member_db.count() - member_start
+        print(f"Member Database: Total: {member_db.count()}, Added: {member_added}")
+
+        # 2. Download Payment Data
+        payments_db = Transaction(payments_db_path, db_key)
+        # Drop linked view if it exists to avoid rename errors when underlying tables change
+        payments_db.conn.execute('DROP VIEW IF EXISTS "linked_payments"')
+        payment_start = payments_db.count()
+
+        # Download both tables into the same DB
+        payments_db.download_csv(
+            self.session, self.url.completed_payments, table_name="completed_payments"
+        )
+        payments_db.download_csv(
+            self.session, self.url.payment_items, table_name="payment_items"
+        )
+
+        payment_added = payments_db.count() - payment_start
+        print(f"Payment Database: Total: {payments_db.count()}, Added: {payment_added}")
+
+        # Link Payment Items to Completed Payments
+        payments_db.link_items()
+        print("Linked completed_payments and payment_items via SQL View.")
+
+        return member_db, payments_db

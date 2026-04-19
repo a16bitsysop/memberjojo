@@ -179,7 +179,7 @@ def table_exists(cursor, table_name: str) -> bool:
     :return: bool of existence
     """
     cursor.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1;",
+        "SELECT 1 FROM sqlite_master WHERE (type='table' OR type='view') AND name=? LIMIT 1;",
         (table_name,),
     )
     return cursor.fetchone() is not None

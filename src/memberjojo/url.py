@@ -62,6 +62,11 @@ class URL:
         return f"{self.membership}/download_completed_payments?state=CO"
 
     @property
+    def payment_items(self):
+        """Returns the payment items download URL"""
+        return f"{self.membership}/download_payment_items"
+
+    @property
     def pending_aproval(self):
         """Returns the members pending approval URL"""
         return f"{self.membership}/download_pending_approval_members"
