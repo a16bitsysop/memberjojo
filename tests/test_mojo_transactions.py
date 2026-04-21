@@ -138,13 +138,13 @@ def test_import_to_different_table(db_path, tmp_path):
     txn = Transaction(db_path, "Password1")
     # Default table is completed_payments
     assert txn.table_name == "completed_payments"
-    
+
     # Data with payment_id for linking
     link_data = [
         {"payment_id": "M1", "amount": "100.5", "desc": "Deposit"},
     ]
     csv_file = setup_mock_csv(tmp_path, "link_test.csv", link_data)
-    
+
     txn.import_csv(csv_file)
     assert txn.table_exists()
     assert txn.count() > 0
@@ -176,7 +176,7 @@ def test_automatic_linking_failure(db_path, csv_file):
     """
     txn = Transaction(db_path, "Password1")
     txn.import_csv(csv_file)
-    
+
     # Re-init, should stay on completed_payments since payment_items is missing
     txn2 = Transaction(db_path, "Password1")
     assert txn2.table_name == "completed_payments"

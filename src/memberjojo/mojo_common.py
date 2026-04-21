@@ -189,7 +189,9 @@ class MojoSkel:
             if result and result[0] == "view":
                 self.conn.execute(f'DROP VIEW IF EXISTS "{self.table_name}"')
             else:
-                self.conn.execute(f"ALTER TABLE {self.table_name} RENAME TO {old_table}")
+                self.conn.execute(
+                    f"ALTER TABLE {self.table_name} RENAME TO {old_table}"
+                )
         return old_table
 
     def print_diff(self, old_table: str):
@@ -387,11 +389,21 @@ class MojoSkel:
         else:
             values.append(val)
 
-    def create_view(
-        self, view_name: str, join_table: str, join_col: str = "payment_id"
+    def create_joined_table(
+        self,
+        table_name: str,
+        join_table: str,
+        join_col: str = "payment_id",
+        is_view: bool = True,
     ):
         """
-        Create a View that joins the current table with another table
+        Create a View or Table that joins the current table with another table
+
+        :param table_name: Name of the view or table to create
+        :param join_table: Name of the table to join with
+        :param join_col: (optional) Column name to join on. Defaults to "payment_id"
+        :param is_view: (optional) If True, create a VIEW, otherwise a TABLE.
+            Defaults to True.
         """
         # Get column names for both tables
         self.cursor.execute(f'PRAGMA table_info("{self.table_name}")')
@@ -408,16 +420,27 @@ class MojoSkel:
         if other_cols:
             select_clause += ", " + ", ".join(other_cols)
 
+        type_str = "VIEW" if is_view else "TABLE"
+
         sql = f"""
-            CREATE VIEW "{view_name}" AS
+            CREATE {type_str} "{table_name}" AS
             SELECT {select_clause}
             FROM "{self.table_name}"
             LEFT JOIN "{join_table}"
             ON "{self.table_name}"."{join_col}" = "{join_table}"."{join_col}"
         """
-        self.conn.execute(f'DROP VIEW IF EXISTS "{view_name}"')
+        self.conn.execute(f'DROP VIEW IF EXISTS "{table_name}"')
+        self.conn.execute(f'DROP TABLE IF EXISTS "{table_name}"')
         self.conn.execute(sql)
         self.conn.commit()
+
+    def create_view(
+        self, view_name: str, join_table: str, join_col: str = "payment_id"
+    ):
+        """
+        Create a View that joins the current table with another table
+        """
+        self.create_joined_table(view_name, join_table, join_col, is_view=True)
 
     def set_table(self, table_name: str):
         """

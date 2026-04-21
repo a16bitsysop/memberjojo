@@ -35,24 +35,43 @@ class Transaction(MojoSkel):
         # Automatically try to link if we are loading an existing DB
         self.link_items()
 
-    def link_items(self, view_name: str = "linked_payments"):
+    def import_csv(self, csv_path, merge=False, table_name=None):
         """
-        Link completed_payments with payment_items through a SQL view
+        Import CSV and relink items
+        """
+        super().import_csv(csv_path, merge=merge, table_name=table_name)
+        self.link_items(force=True)
+        if table_name:
+            self.set_table(table_name)
 
-        :param view_name: (optional) Name of the view. Defaults to "linked_payments"
+    def download_csv(self, session, url, merge=False, table_name=None):
+        """
+        Download CSV and relink items
+        """
+        super().download_csv(session, url, merge=merge, table_name=table_name)
+        self.link_items(force=True)
+        if table_name:
+            self.set_table(table_name)
+
+    def link_items(self, table_name: str = "linked_payments", force: bool = False):
+        """
+        Link completed_payments with payment_items through a SQL table
+
+        :param table_name: (optional) Name of the table. Defaults to "linked_payments"
+        :param force: (optional) If True, recreate the table even if it exists.
         """
         join_col = "payment_id"
-        if not mojo_loader.table_exists(self.cursor, "completed_payments") or \
-           not mojo_loader.table_exists(self.cursor, "payment_items"):
+        if not mojo_loader.table_exists(
+            self.cursor, "completed_payments"
+        ) or not mojo_loader.table_exists(self.cursor, "payment_items"):
             return
 
-        # Ensure join_col exists in both tables
-        for table in ["completed_payments", "payment_items"]:
-            self.cursor.execute(f'PRAGMA table_info("{table}")')
-            cols = {row[1] for row in self.cursor.fetchall()}
-            if join_col not in cols:
-                return
+        if not force and mojo_loader.table_exists(self.cursor, table_name):
+            self.set_table(table_name)
+            return
 
         self.set_table("completed_payments")
-        self.create_view(view_name, "payment_items", join_col=join_col)
-        self.set_table(view_name)
+        self.create_joined_table(
+            table_name, "payment_items", join_col=join_col, is_view=False
+        )
+        self.set_table(table_name)
