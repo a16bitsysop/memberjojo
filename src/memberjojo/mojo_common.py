@@ -429,8 +429,17 @@ class MojoSkel:
             LEFT JOIN "{join_table}"
             ON "{self.table_name}"."{join_col}" = "{join_table}"."{join_col}"
         """
-        self.conn.execute(f'DROP VIEW IF EXISTS "{table_name}"')
-        self.conn.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+        # Drop existing object based on its type to avoid OperationalError
+        self.cursor.execute(
+            "SELECT type FROM sqlite_master WHERE name=?", (table_name,)
+        )
+        result = self.cursor.fetchone()
+        if result:
+            if result[0] == "view":
+                self.conn.execute(f'DROP VIEW IF EXISTS "{table_name}"')
+            else:
+                self.conn.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+
         self.conn.execute(sql)
         self.conn.commit()
 

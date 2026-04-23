@@ -141,8 +141,6 @@ class Download:
 
         # 2. Download Payment Data
         payments_db = Transaction(payments_db_path, db_key)
-        # Drop linked view if it exists to avoid rename errors when underlying tables change
-        payments_db.conn.execute('DROP VIEW IF EXISTS "linked_payments"')
         payment_start = payments_db.count()
 
         # Download both tables into the same DB
@@ -158,6 +156,6 @@ class Download:
 
         # Link Payment Items to Completed Payments
         payments_db.link_items()
-        print("Linked completed_payments and payment_items via SQL View.")
+        print("Linked completed_payments and payment_items via SQL Table.")
 
         return member_db, payments_db
