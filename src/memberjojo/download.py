@@ -139,7 +139,7 @@ class Download:
         member_added = member_db.count() - member_start
         print(f"Member Database: Total: {member_db.count()}, Added: {member_added}")
 
-        # 2. Download Payment Data
+        # Download Payment Data
         payments_db = Transaction(payments_db_path, db_key)
         payment_start = payments_db.count()
 
