@@ -155,18 +155,12 @@ class MojoSkel:
         fields = []
         for _cid, name, col_type, _notnull, _dflt, _pk in cols:
             t = col_type.upper()
-            norm_name = mojo_loader.normalize(name)
 
             if t.startswith("INT"):
                 py_type = int
             elif t.startswith("REAL") or t.startswith("NUM") or t.startswith("DEC"):
                 py_type = Decimal
-            elif t.startswith("DATE") or (
-                "date" in norm_name
-                and not any(x in norm_name for x in ("newsletter", "active", "status"))
-            ):
-                py_type = date
-            elif norm_name.endswith("_at") or norm_name.endswith("_since"):
+            elif t.startswith("DATE"):
                 py_type = date
             else:
                 py_type = str
@@ -187,7 +181,17 @@ class MojoSkel:
         self.conn.execute(f"DROP TABLE IF EXISTS {old_table}")
         # Preserve existing table
         if existing:
-            self.conn.execute(f"ALTER TABLE {self.table_name} RENAME TO {old_table}")
+            # Check if it's a view, views can't be renamed
+            self.cursor.execute(
+                "SELECT type FROM sqlite_master WHERE name=?", (self.table_name,)
+            )
+            result = self.cursor.fetchone()
+            if result and result[0] == "view":
+                self.conn.execute(f'DROP VIEW IF EXISTS "{self.table_name}"')
+            else:
+                self.conn.execute(
+                    f"ALTER TABLE {self.table_name} RENAME TO {old_table}"
+                )
         return old_table
 
     def print_diff(self, old_table: str):
@@ -213,7 +217,13 @@ class MojoSkel:
             # Cleanup old table (always)
             self.conn.execute(f"DROP TABLE {old_table}")
 
-    def download_csv(self, session: requests.Session, url: str, merge: bool = False):
+    def download_csv(
+        self,
+        session: requests.Session,
+        url: str,
+        merge: bool = False,
+        table_name: str = None,
+    ):
         """
         Download the CSV from url and import into the sqlite database
         If a previous table exists, generate a diff
@@ -221,7 +231,11 @@ class MojoSkel:
         :param session: Requests session to use for download
         :param url: url of the csv to download
         :param merge: (optional) If True, merge into existing table. Defaults to False.
+        :param table_name: (optional) Table name to use for import. Defaults to self.table_name.
         """
+        if table_name:
+            self.table_name = table_name
+
         had_existing = False
         old_table = ""
 
@@ -245,14 +259,18 @@ class MojoSkel:
 
         self.print_diff(old_table)
 
-    def import_csv(self, csv_path: Path, merge: bool = False):
+    def import_csv(self, csv_path: Path, merge: bool = False, table_name: str = None):
         """
         Import the passed CSV into the encrypted sqlite database
 
         :param csv_path: Path like path of csv file
         :param merge: (optional) If True, merge into existing table. Defaults to False.
             Form importing current, and expired members as headings are the same.
+        :param table_name: (optional) Table name to use for import. Defaults to self.table_name.
         """
+        if table_name:
+            self.table_name = table_name
+
         had_existing = False
         old_table = ""
 
@@ -301,7 +319,11 @@ class MojoSkel:
         return 0
 
     def get_row(
-        self, entry_name: str, entry_value: str, only_one: bool = True
+        self,
+        entry_name: str,
+        entry_value: str,
+        only_one: bool = True,
+        table_name: str = None,
     ) -> Union[sqlite3.Row, List[sqlite3.Row], None]:
         """
         Retrieve a single or multiple rows matching column = value (case-insensitive)
@@ -310,6 +332,7 @@ class MojoSkel:
         :param entry_value: Value to match
         :param only_one: If True (default), return the first matching row
                 If False, return a list of all matching rows
+        :param table_name: (optional) Table name to use for query. Defaults to self.table_name.
 
         :return:
             - If only_one=True → a single sqlite3.Row or None
@@ -317,7 +340,7 @@ class MojoSkel:
         """
         match_dict = {f"{entry_name}": entry_value}
 
-        return self.get_row_multi(match_dict, only_one)
+        return self.get_row_multi(match_dict, only_one, table_name=table_name)
 
     def _build_query_conditions(self, match_dict: dict) -> Tuple[List[str], List[Any]]:
         """
@@ -366,8 +389,95 @@ class MojoSkel:
         else:
             values.append(val)
 
+    def create_joined_table(
+        self,
+        table_name: str,
+        join_table: str,
+        join_col: str = "payment_id",
+        is_view: bool = True,
+    ):
+        """
+        Create a View or Table that joins the current table with another table
+
+        :param table_name: Name of the view or table to create
+        :param join_table: Name of the table to join with
+        :param join_col: (optional) Column name to join on. Defaults to "payment_id"
+        :param is_view: (optional) If True, create a VIEW, otherwise a TABLE.
+            Defaults to True.
+        """
+        # Get column names for both tables
+        self.cursor.execute(f'PRAGMA table_info("{self.table_name}")')
+        cols1 = {row[1] for row in self.cursor.fetchall()}
+        self.cursor.execute(f'PRAGMA table_info("{join_table}")')
+        cols2 = [row[1] for row in self.cursor.fetchall()]
+
+        # Skip redundant personal info columns that are likely identical
+        # but preserve and alias other conflicting columns
+        skip_cols = {
+            "first_name",
+            "last_name",
+            "email",
+            "member_number",
+            "membermojo_id",
+        }
+
+        other_cols = []
+        for c in cols2:
+            if c == join_col or c in skip_cols:
+                continue
+            if c in cols1:
+                other_cols.append(f'"{join_table}"."{c}" AS "item_{c}"')
+            else:
+                other_cols.append(f'"{join_table}"."{c}"')
+
+        # Select all from table1, plus specific columns from table2
+        select_clause = f'"{self.table_name}".*'
+        if other_cols:
+            select_clause += ", " + ", ".join(other_cols)
+
+        type_str = "VIEW" if is_view else "TABLE"
+
+        sql = f"""
+            CREATE {type_str} "{table_name}" AS
+            SELECT {select_clause}
+            FROM "{self.table_name}"
+            LEFT JOIN "{join_table}"
+            ON "{self.table_name}"."{join_col}" = "{join_table}"."{join_col}"
+        """
+        # Drop existing object based on its type to avoid OperationalError
+        self.cursor.execute(
+            "SELECT type FROM sqlite_master WHERE name=?", (table_name,)
+        )
+        result = self.cursor.fetchone()
+        if result:
+            if result[0] == "view":
+                self.conn.execute(f'DROP VIEW IF EXISTS "{table_name}"')
+            else:
+                self.conn.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+
+        self.conn.execute(sql)
+        self.conn.commit()
+
+    def create_view(
+        self, view_name: str, join_table: str, join_col: str = "payment_id"
+    ):
+        """
+        Create a View that joins the current table with another table
+        """
+        self.create_joined_table(view_name, join_table, join_col, is_view=True)
+
+    def set_table(self, table_name: str):
+        """
+        Switch to a different table and update the row_class
+        """
+        self.table_name = table_name
+        if self.table_exists():
+            self.row_class = self._build_dataclass_from_table()
+        else:
+            self.row_class = None
+
     def get_row_multi(
-        self, match_dict: dict, only_one: bool = True
+        self, match_dict: dict, only_one: bool = True, table_name: str = None
     ) -> Union[sqlite3.Row, List[sqlite3.Row], None]:
         """
         Retrieve one or many rows matching multiple column=value pairs
@@ -375,11 +485,15 @@ class MojoSkel:
         :param match_dict: Dictionary of column names and values to match
         :param only_one: If True (default), return the first matching row
                         If False, return a list of all matching rows
+        :param table_name: (optional) Table name to use for query. Defaults to self.table_name.
 
         :return:
             - If only_one=True → a single sqlite3.Row or None
             - If only_one=False → list of sqlite3.Row (may be empty)
         """
+        if table_name:
+            self.set_table(table_name)
+
         if not self.table_exists():
             return None if only_one else []
 

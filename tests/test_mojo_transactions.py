@@ -131,6 +131,58 @@ def test_get_row(payment_db):
     assert row.id == 5
 
 
+def test_import_to_different_table(db_path, tmp_path):
+    """
+    Test importing into a different table name and automatic linking
+    """
+    txn = Transaction(db_path, "Password1")
+    # Default table is completed_payments
+    assert txn.table_name == "completed_payments"
+
+    # Data with payment_id for linking
+    link_data = [
+        {"payment_id": "M1", "amount": "100.5", "desc": "Deposit"},
+    ]
+    csv_file = setup_mock_csv(tmp_path, "link_test.csv", link_data)
+
+    txn.import_csv(csv_file)
+    assert txn.table_exists()
+    assert txn.count() > 0
+
+    # Import into a different table
+    txn.import_csv(csv_file, table_name="payment_items")
+    assert txn.table_name == "payment_items"
+    assert txn.table_exists()
+    assert txn.count() > 0
+
+    # Verify both tables exist in the same database
+    txn.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = [row[0] for row in txn.cursor.fetchall()]
+    assert "completed_payments" in tables
+    assert "payment_items" in tables
+
+    # Test automatic linking by re-initializing
+    txn2 = Transaction(db_path, "Password1")
+    assert txn2.table_name == "linked_payments"
+    assert txn2.table_exists()
+    # verify we can query from the linked view
+    row = txn2.get_row_multi({"payment_id": "M1"})
+    assert row is not None
+
+
+def test_automatic_linking_failure(db_path, csv_file):
+    """
+    Test that Transaction doesn't fail if one table is missing
+    """
+    txn = Transaction(db_path, "Password1")
+    txn.import_csv(csv_file)
+
+    # Re-init, should stay on completed_payments since payment_items is missing
+    txn2 = Transaction(db_path, "Password1")
+    assert txn2.table_name == "completed_payments"
+    assert not txn2.table_exists() or txn2.table_name == "completed_payments"
+
+
 def test_get_row_fuzz_updated(payment_db):
     """
     Test fuzzy searching with partial matches, updated for get_row_multi.
