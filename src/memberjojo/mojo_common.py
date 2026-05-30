@@ -413,8 +413,14 @@ class MojoSkel:
 
         # Skip redundant personal info columns that are likely identical
         # but preserve and alias other conflicting columns
-        skip_cols = {"first_name", "last_name", "email", "member_number", "membermojo_id"}
-        
+        skip_cols = {
+            "first_name",
+            "last_name",
+            "email",
+            "member_number",
+            "membermojo_id",
+        }
+
         other_cols = []
         for c in cols2:
             if c == join_col or c in skip_cols:
