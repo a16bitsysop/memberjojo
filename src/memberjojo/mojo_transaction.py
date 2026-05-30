@@ -72,6 +72,6 @@ class Transaction(MojoSkel):
 
         self.set_table("completed_payments")
         self.create_joined_table(
-            table_name, "payment_items", join_col=join_col, is_view=False
+            table_name, "payment_items", join_col=join_col, is_view=True
         )
         self.set_table(table_name)

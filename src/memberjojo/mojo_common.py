@@ -411,9 +411,18 @@ class MojoSkel:
         self.cursor.execute(f'PRAGMA table_info("{join_table}")')
         cols2 = [row[1] for row in self.cursor.fetchall()]
 
-        # Filter cols2 to only include columns NOT in cols1
-        # except for the join column which we need for the ON clause
-        other_cols = [f'"{join_table}"."{c}"' for c in cols2 if c not in cols1]
+        # Skip redundant personal info columns that are likely identical
+        # but preserve and alias other conflicting columns
+        skip_cols = {"first_name", "last_name", "email", "member_number", "membermojo_id"}
+        
+        other_cols = []
+        for c in cols2:
+            if c == join_col or c in skip_cols:
+                continue
+            if c in cols1:
+                other_cols.append(f'"{join_table}"."{c}" AS "item_{c}"')
+            else:
+                other_cols.append(f'"{join_table}"."{c}"')
 
         # Select all from table1, plus specific columns from table2
         select_clause = f'"{self.table_name}".*'
