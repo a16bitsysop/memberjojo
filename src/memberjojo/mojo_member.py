@@ -5,7 +5,7 @@ This module loads data from a `members.csv` file downloaded from Membermojo,
 stores it in SQLite, and provides helper functions for member lookups
 """
 
-from difflib import get_close_matches
+from difflib import get_close_matches, SequenceMatcher
 from pathlib import Path
 from pprint import pprint
 from typing import Optional
@@ -309,6 +309,7 @@ class Member(MojoSkel):
         """
 
         name = name.strip().lower()
+        parts = name.split()
 
         # Get all members
         self.cursor.execute(
@@ -317,16 +318,32 @@ class Member(MojoSkel):
         rows = self.cursor.fetchall()
 
         choices = [row["full"] for row in rows]
-        matches = get_close_matches(name, choices, n=1, cutoff=0.7)
+        matches = get_close_matches(name, choices, n=10, cutoff=0.7)
 
-        if not matches:
-            if found_error:
-                raise ValueError(
-                    f"❌ Cannot find {name} in member database with fuzzy match."
+        for match in matches:
+            row = next(r for r in rows if r["full"] == match)
+            if len(parts) >= 2:
+                input_last = parts[-1]
+                cand_last = row["last_name"].lower()
+                last_ratio = SequenceMatcher(None, input_last, cand_last).ratio()
+
+                # Check prefix ratio for extra text appended to last name (e.g. EMILY STONMEMBERSHIP)
+                short_len = min(len(input_last), len(cand_last))
+                prefix_ratio = (
+                    SequenceMatcher(
+                        None, input_last[:short_len], cand_last[:short_len]
+                    ).ratio()
+                    if short_len > 0
+                    else 0
                 )
-            return None
 
-        match = matches[0]
-        # return the sqlite row for the best match
-        row = next(r for r in rows if r["full"] == match)
-        return (row["first_name"], row["last_name"])
+                if last_ratio < 0.7 and prefix_ratio < 0.7:
+                    continue
+
+            return (row["first_name"], row["last_name"])
+
+        if found_error:
+            raise ValueError(
+                f"❌ Cannot find {name} in member database with fuzzy match."
+            )
+        return None

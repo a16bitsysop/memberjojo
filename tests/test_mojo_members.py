@@ -223,6 +223,13 @@ def test_get_fuzz_name_returns_correct_member(member_db):
     assert result == ("Emily", "Stone")
 
 
+def test_get_fuzz_name_prevents_false_positive_different_surname(member_db):
+    """
+    Test get_fuzz_name does not match a person with a different surname just because first name matches.
+    """
+    assert member_db.get_fuzz_name("John Chapman") is None
+
+
 def test_get_fuzz_name_raises_value_error_when_no_match_and_found_error_true(member_db):
     """
     Test get_fuzz_name raises ValueError when no fuzzy match is found and found_error is True.
