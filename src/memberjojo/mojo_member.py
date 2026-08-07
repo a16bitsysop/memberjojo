@@ -296,6 +296,7 @@ class Member(MojoSkel):
         return None
 
     def get_fuzz_name(self, name: str, found_error: bool = False):
+        # pylint: disable=too-many-locals
         """
         Fuzzy search for members by name using partial matching
         Searches across first_name and last_name fields
@@ -323,11 +324,15 @@ class Member(MojoSkel):
         for match in matches:
             row = next(r for r in rows if r["full"] == match)
             if len(parts) >= 2:
+                input_first = parts[0]
                 input_last = parts[-1]
+                cand_first = row["first_name"].lower()
                 cand_last = row["last_name"].lower()
+
                 last_ratio = SequenceMatcher(None, input_last, cand_last).ratio()
 
-                # Check prefix ratio for extra text appended to last name (e.g. EMILY STONMEMBERSHIP)
+                # Check prefix ratio for extra text appended to last name
+                # (e.g. EMILY STONMEMBERSHIP)
                 short_len = min(len(input_last), len(cand_last))
                 prefix_ratio = (
                     SequenceMatcher(
@@ -338,6 +343,16 @@ class Member(MojoSkel):
                 )
 
                 if last_ratio < 0.7 and prefix_ratio < 0.7:
+                    continue
+
+                first_ratio = SequenceMatcher(None, input_first, cand_first).ratio()
+                first_initial_match = (
+                    bool(input_first)
+                    and bool(cand_first)
+                    and input_first[0] == cand_first[0]
+                )
+
+                if first_ratio < 0.6 and not first_initial_match:
                     continue
 
             return (row["first_name"], row["last_name"])

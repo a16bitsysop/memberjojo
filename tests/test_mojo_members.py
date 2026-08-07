@@ -225,9 +225,17 @@ def test_get_fuzz_name_returns_correct_member(member_db):
 
 def test_get_fuzz_name_prevents_false_positive_different_surname(member_db):
     """
-    Test get_fuzz_name does not match a person with a different surname just because first name matches.
+    Test get_fuzz_name does not match a person with a different surname just because
+    first name matches, nor a person with a completely different first name
+    (e.g. James White vs Kate White).
     """
+    sql = (
+        f'INSERT INTO "{member_db.table_name}" '
+        '("member_number", "first_name", "last_name") VALUES (?, ?, ?)'
+    )
+    member_db.cursor.execute(sql, (6, "Kate", "White"))
     assert member_db.get_fuzz_name("John Chapman") is None
+    assert member_db.get_fuzz_name("James White") is None
 
 
 def test_get_fuzz_name_raises_value_error_when_no_match_and_found_error_true(member_db):
