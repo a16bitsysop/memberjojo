@@ -4,7 +4,7 @@ A class for downloading from membermojo
 
 import getpass
 import re
-from http.cookiejar import MozillaCookieJar
+from http.cookiejar import CookieJar
 from pathlib import Path
 import requests
 
@@ -16,17 +16,17 @@ from .mojo_transaction import Transaction
 class Download:
     """A class for managing Membermojo downloads"""
 
-    def __init__(self, shortname: str, cookie_jar: MozillaCookieJar):
+    def __init__(self, shortname: str, cookie_jar: CookieJar):
         """
         Initialise the class
 
         :param shortname: the membermojo shortname
-        :param cookie_jar: a MozillaCookieJar with the session cookie, or empty to get one
+        :param cookie_jar: a CookieJar with the session cookie, or empty to get one
         """
         self.url = URL(shortname)
         self.cookie_jar = cookie_jar
         self.session = requests.Session()
-        self.session.cookies = self.cookie_jar
+        self.session.cookies = cookie_jar
 
     def fill_login(self):
         """

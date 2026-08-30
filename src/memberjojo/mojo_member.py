@@ -27,7 +27,7 @@ class Member(MojoSkel):
 
     def __init__(
         self,
-        member_db_path: Path,
+        member_db_path: str | Path,
         db_key: str,
         table_name: str = "members",
     ):
@@ -261,13 +261,13 @@ class Member(MojoSkel):
 
         return None
 
-    def get_first_last_name(self, member_number: int) -> Optional[str]:
+    def get_first_last_name(self, member_number: int) -> Optional[tuple[str, str]]:
         """
-        Get full name for a given member number
+        Get first and last name for a given member number
 
         :param member_number: Member number to look up
 
-        :return: Full name as tuple, or None if not found
+        :return: (first_name, last_name) tuple, or None if not found
         """
         sql = f"""
             SELECT "first_name", "last_name"

@@ -24,6 +24,7 @@ dev = [
 lint = [
     "black",
     "pylint",
+    "mypy",
 ]
 docs = [
     "furo",                       # HTML theme
@@ -45,3 +46,10 @@ pythonpath = ["src"]
 output-format = "colorized"
 verbose = true
 ignore-patterns = ["_version.py"]
+
+[tool.mypy]
+python_version = "3.10"
+mypy_path = "src"
+exclude = ["_version.py"]
+ignore_missing_imports = true
+warn_unused_configs = true

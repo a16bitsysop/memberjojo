@@ -33,7 +33,7 @@ class MojoSkel:
     for querying tables
     """
 
-    def __init__(self, db_path: str, db_key: str, table_name: str):
+    def __init__(self, db_path: str | Path, db_key: str, table_name: str):
         """
         Initialize the MojoSkel class
 
@@ -56,8 +56,10 @@ class MojoSkel:
         self.cursor = self.conn.cursor()
 
         if HAS_SQLCIPHER and db_key:
-            # Apply SQLCipher key (parameterized to avoid SQL injection)
-            self.cursor.execute("PRAGMA key=?", (db_key,))
+            # Apply SQLCipher key (escape embedded single quotes to avoid SQL
+            # injection). SQLCipher does not support bind parameters in PRAGMA.
+            escaped_key = db_key.replace("'", "''")
+            self.cursor.execute(f"PRAGMA key='{escaped_key}'")
             self.cursor.execute("PRAGMA cipher_compatibility = 4")
             print(
                 "Cipher:", self.cursor.execute("PRAGMA cipher_version;").fetchone()[0]
@@ -67,6 +69,7 @@ class MojoSkel:
             print(f"Unencrypted database {self.db_path} loaded securely.")
 
         # After table exists (or after import), build the dataclass
+        self.row_class: type[Any] | None
         if self.table_exists():
             self.row_class = self._build_dataclass_from_table()
         else:
@@ -89,6 +92,9 @@ class MojoSkel:
         :return: A dataclass object of the row
         """
         row_dict = dict(row)
+
+        if self.row_class is None:
+            raise RuntimeError("Table not loaded yet — no dataclass available")
 
         # Convert types based on dataclass field types
         for field in self.row_class.__dataclass_fields__.values():
@@ -152,10 +158,11 @@ class MojoSkel:
         if not cols:
             raise ValueError(f"Table '{self.table_name}' does not exist")
 
-        fields = []
+        fields: list[tuple[str, type]] = []
         for _cid, name, col_type, _notnull, _dflt, _pk in cols:
             t = col_type.upper()
 
+            py_type: type
             if t.startswith("INT"):
                 py_type = int
             elif t.startswith("REAL") or t.startswith("NUM") or t.startswith("DEC"):
@@ -222,7 +229,7 @@ class MojoSkel:
         session: requests.Session,
         url: str,
         merge: bool = False,
-        table_name: str = None,
+        table_name: str | None = None,
     ):
         """
         Download the CSV from url and import into the sqlite database
@@ -259,7 +266,9 @@ class MojoSkel:
 
         self.print_diff(old_table)
 
-    def import_csv(self, csv_path: Path, merge: bool = False, table_name: str = None):
+    def import_csv(
+        self, csv_path: Path, merge: bool = False, table_name: str | None = None
+    ):
         """
         Import the passed CSV into the encrypted sqlite database
 
@@ -323,7 +332,7 @@ class MojoSkel:
         entry_name: str,
         entry_value: str,
         only_one: bool = True,
-        table_name: str = None,
+        table_name: str | None = None,
     ) -> Union[sqlite3.Row, List[sqlite3.Row], None]:
         """
         Retrieve a single or multiple rows matching column = value (case-insensitive)
@@ -478,7 +487,7 @@ class MojoSkel:
             self.row_class = None
 
     def get_row_multi(
-        self, match_dict: dict, only_one: bool = True, table_name: str = None
+        self, match_dict: dict, only_one: bool = True, table_name: str | None = None
     ) -> Union[sqlite3.Row, List[sqlite3.Row], None]:
         """
         Retrieve one or many rows matching multiple column=value pairs

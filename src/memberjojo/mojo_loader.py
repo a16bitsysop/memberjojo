@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
-from typing import Any, IO, Tuple
+from typing import Any, Tuple, cast
 
 import re
 import sqlite3 as sqlite3_builtin
@@ -120,7 +120,7 @@ def infer_columns_from_rows(rows: list[dict]) -> dict[str, str]:
 
     :return: dict of name, type for columns
     """
-    type_counters = defaultdict(Counter)
+    type_counters: dict[str, Counter[str]] = defaultdict(Counter)
 
     for row in rows:
         for key, value in row.items():
@@ -194,7 +194,7 @@ def _process_row(row: dict, cols: list, norm_map: dict, inferred_cols: dict) -> 
     """
     Process a CSV row, converting dates and handling empty values.
     """
-    values = []
+    values: list[str | None] = []
     for c in cols:
         val = row[c]
         if val == "" or val is None:
@@ -291,7 +291,7 @@ def diff_cipher_tables(
     *,
     new_table: str,
     old_table: str,
-    key: str = None,
+    key: str | None = None,
 ) -> list[DiffRow]:
     """
     Copy old and new tables from SQLCipher into a single
@@ -357,7 +357,7 @@ def _generate_sql_diff(
     *,
     new_table: str,
     old_table: str,
-    key: str = None,
+    key: str | None = None,
 ) -> list[sqlite3_builtin.Row]:
     """
     Generate a diff between two tables using standard SQLite features
@@ -456,7 +456,7 @@ def _generate_sql_diff(
 
 def download_csv_helper(
     conn, table_name: str, url: str, session: requests.Session, merge: bool = False
-) -> IO[str]:
+) -> bool:
     """
     Download url into a StringIO file object using streaming
     and import into database
@@ -466,6 +466,8 @@ def download_csv_helper(
     :param url: URL of the csv to download
     :param session: A requests session to use for the download
     :param merge: (optional) If True, merge into existing table. Defaults to False.
+
+    :return: True if the CSV was downloaded and imported, False if empty
     """
 
     print(f"☁️ Downloading from: {url}")
@@ -481,7 +483,8 @@ def download_csv_helper(
         # decode_unicode=True uses the encoding from the response headers
         for chunk in resp.iter_content(chunk_size=8192, decode_unicode=True):
             if chunk:
-                string_buffer.write(chunk)
+                # decode_unicode=True yields str chunks despite requests' typing
+                string_buffer.write(cast(str, chunk))
 
         # Reset pointer to the beginning for DictReader
         string_buffer.seek(0)
