@@ -56,8 +56,8 @@ class MojoSkel:
         self.cursor = self.conn.cursor()
 
         if HAS_SQLCIPHER and db_key:
-            # Apply SQLCipher key
-            self.cursor.execute(f"PRAGMA key='{db_key}'")
+            # Apply SQLCipher key (parameterized to avoid SQL injection)
+            self.cursor.execute("PRAGMA key=?", (db_key,))
             self.cursor.execute("PRAGMA cipher_compatibility = 4")
             print(
                 "Cipher:", self.cursor.execute("PRAGMA cipher_version;").fetchone()[0]
@@ -350,38 +350,39 @@ class MojoSkel:
         values = []
 
         for col, val in match_dict.items():
+            quoted = self.quote_identifier(col)
             if val is None or val == "":
-                conditions.append(f'"{col}" IS NULL')
+                conditions.append(f"{quoted} IS NULL")
             elif isinstance(val, Like):
-                conditions.append(f'LOWER("{col}") LIKE LOWER(?)')
+                conditions.append(f"LOWER({quoted}) LIKE LOWER(?)")
                 values.append(val.pattern)
             elif isinstance(val, DateRange):
-                conditions.append(f'"{col}" BETWEEN ? AND ?')
+                conditions.append(f"{quoted} BETWEEN ? AND ?")
                 values.extend([val.start.isoformat(), val.end.isoformat()])
             elif isinstance(val, (tuple, list)) and len(val) == 2:
-                self._add_range_condition(col, val, conditions, values)
+                self._add_range_condition(quoted, val, conditions, values)
             else:
-                self._add_equality_condition(col, val, conditions, values)
+                self._add_equality_condition(quoted, val, conditions, values)
         return conditions, values
 
     def _add_range_condition(self, col, val, conditions, values):
-        """Helper for range conditions"""
+        """Helper for range conditions (col is already quoted)"""
         lower, upper = val
         if lower is not None and upper is not None:
-            conditions.append(f'"{col}" BETWEEN ? AND ?')
+            conditions.append(f"{col} BETWEEN ? AND ?")
             values.extend(
                 [x.isoformat() if isinstance(x, date) else x for x in (lower, upper)]
             )
         elif lower is not None:
-            conditions.append(f'"{col}" >= ?')
+            conditions.append(f"{col} >= ?")
             values.append(lower.isoformat() if isinstance(lower, date) else lower)
         elif upper is not None:
-            conditions.append(f'"{col}" <= ?')
+            conditions.append(f"{col} <= ?")
             values.append(upper.isoformat() if isinstance(upper, date) else upper)
 
     def _add_equality_condition(self, col, val, conditions, values):
-        """Helper for equality conditions"""
-        conditions.append(f'"{col}" = ?')
+        """Helper for equality conditions (col is already quoted)"""
+        conditions.append(f"{col} = ?")
         if isinstance(val, date):
             values.append(val.isoformat())
         elif isinstance(val, Decimal):
@@ -535,3 +536,28 @@ class MojoSkel:
         Return True or False if a table exists
         """
         return mojo_loader.table_exists(self.cursor, self.table_name)
+
+    def quote_identifier(self, identifier: str) -> str:
+        """
+        Validate that `identifier` is a real column in the current table and
+        returns it safely quoted for interpolation into SQL.
+
+        Raises ValueError if the identifier is not a known column, preventing
+        SQL injection via quoted identifiers.
+
+        :param identifier: The column name to validate and quote
+
+        :return: The safely double-quoted column name
+
+        :raises ValueError: If the column does not exist in the table
+        """
+        self.cursor.execute(f'PRAGMA table_info("{self.table_name}")')
+        columns = {row[1] for row in self.cursor.fetchall()}
+
+        if identifier not in columns:
+            raise ValueError(
+                f"Unknown column '{identifier}' for table '{self.table_name}'"
+            )
+
+        escaped = identifier.replace('"', '""')
+        return f'"{escaped}"'

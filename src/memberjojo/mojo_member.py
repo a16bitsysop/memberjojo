@@ -5,7 +5,7 @@ This module loads data from a `members.csv` file downloaded from Membermojo,
 stores it in SQLite, and provides helper functions for member lookups
 """
 
-from difflib import get_close_matches, SequenceMatcher
+from difflib import SequenceMatcher
 from pathlib import Path
 from pprint import pprint
 from typing import Optional
@@ -48,7 +48,7 @@ class Member(MojoSkel):
         :raises ValueError: If entry name not found
         """
         sql = f"""
-            SELECT "{entry_name}"
+            SELECT {self.quote_identifier(entry_name)}
             FROM "{self.table_name}"
             WHERE "member_number" = ?
         """
@@ -312,17 +312,53 @@ class Member(MojoSkel):
         name = name.strip().lower()
         parts = name.split()
 
-        # Get all members
+        # Stream all members, keeping only the best candidates in memory.
+        # This replicates difflib.get_close_matches / heapq.nlargest exactly
+        # (real_quick_ratio/quick_ratio pre-filters, ratio cutoff, and ordering
+        # by the (ratio, full_name) tuple) without materialising the whole table.
+        cutoff = 0.7
+        n = 10
+        s = SequenceMatcher()
+        s.set_seq2(name)
+        # best holds (ratio, full_name) tuples, the (up to) n largest by tuple
+        # comparison, matching heapq.nlargest (ties broken on full_name).
+        best = []
+        seen = set()
+
         self.cursor.execute(
             f'SELECT *, LOWER(first_name || " " || last_name) AS full FROM "{self.table_name}"'
         )
-        rows = self.cursor.fetchall()
 
-        choices = [row["full"] for row in rows]
-        matches = get_close_matches(name, choices, n=10, cutoff=0.7)
+        for row in self.cursor:
+            full = row["full"]
+            if full in seen:
+                continue
+            seen.add(full)
 
-        for match in matches:
-            row = next(r for r in rows if r["full"] == match)
+            s.set_seq1(full)
+            # Same acceptance chain as get_close_matches
+            if not (
+                s.real_quick_ratio() >= cutoff
+                and s.quick_ratio() >= cutoff
+                and s.ratio() >= cutoff
+            ):
+                continue
+
+            best.append((s.ratio(), full))
+            best.sort()
+            if len(best) > n:
+                # Remove smallest by (ratio, full_name) tuple comparison
+                best.pop(0)
+
+        # Process candidates best-first (mirrors get_close_matches ordering)
+        for _ratio, full in reversed(best):
+            rows = self.cursor.execute(
+                f'SELECT *, LOWER(first_name || " " || last_name) AS full '
+                f'FROM "{self.table_name}" WHERE LOWER(first_name || " " || last_name) = ?',
+                (full,),
+            )
+            # Use the first matching row for a given full name (dedup)
+            row = next(iter(rows))
             if len(parts) >= 2:
                 input_first = parts[0]
                 input_last = parts[-1]

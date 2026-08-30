@@ -82,7 +82,7 @@ def parse_date(value: Any) -> datetime | None:
     return None
 
 
-def _guess_type(value: any) -> str:
+def _guess_type(value: Any) -> str:
     """
     Guess SQLite data type of a CSV value: 'INTEGER', 'REAL', 'DATE', or 'TEXT'
 
@@ -291,6 +291,7 @@ def diff_cipher_tables(
     *,
     new_table: str,
     old_table: str,
+    key: str = None,
 ) -> list[DiffRow]:
     """
     Copy old and new tables from SQLCipher into a single
@@ -299,6 +300,8 @@ def diff_cipher_tables(
     :param conn: sqlite connection to the db
     :param new_table: name of the new table for comparison
     :param old_table: name of the old table for comparison
+    :param key: (optional) column to use as the join key for the diff.
+        Defaults to the first common column.
 
     :return: a list of DiffRow entries of the changed rows
     """
@@ -340,6 +343,7 @@ def diff_cipher_tables(
             plain,
             new_table=new_table,
             old_table=old_table,
+            key=key,
         )
 
         return [_diffrow_from_sql_row(r) for r in rows]
@@ -353,6 +357,7 @@ def _generate_sql_diff(
     *,
     new_table: str,
     old_table: str,
+    key: str = None,
 ) -> list[sqlite3_builtin.Row]:
     """
     Generate a diff between two tables using standard SQLite features
@@ -364,6 +369,8 @@ def _generate_sql_diff(
     :param conn: sqlite connection to the db, using python builtin sqlite
     :param new_table: name of the new table to use for comparison
     :param old_table: name of the old table to use for comparison
+    :param key: (optional) column to use as the join key for the diff.
+        Defaults to the first common column (excluding rowid).
 
     :return: list of sqlite rows that are changed
     """
@@ -387,9 +394,17 @@ def _generate_sql_diff(
     if not common_cols:
         raise RuntimeError(f"No common columns between {new_table} and {old_table}")
 
-    # First column of common columns is key, others are for comparison
-    key = common_cols[0]
-    non_key_cols = common_cols[1:]
+    # Explicit key if provided, otherwise default to the first common column
+    if key is not None:
+        if key not in common_cols:
+            raise RuntimeError(
+                f"Diff key {key!r} is not a common column between "
+                f"{new_table} and {old_table}"
+            )
+    else:
+        key = common_cols[0]
+
+    non_key_cols = [c for c in common_cols if c != key]
 
     # Preview columns (key first, then others for readability)
     preview_cols = [key] + non_key_cols[:5]
