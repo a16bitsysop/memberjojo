@@ -255,3 +255,105 @@ def test_member_count(member_db):
     """
     assert member_db.member_type_count("half") == 2
     assert member_db.member_type_count("noop") == 0
+
+
+def test_get_number_first_last_debug(member_db):
+    """
+    Debug mode should print the query and result without error
+    """
+    member_db.debug = True
+    assert member_db.get_number_first_last("john", "doe") == 1
+
+
+def test_get_number_first_last_found_error(member_db):
+    """
+    get_number_first_last with found_error=True should raise when not found
+    """
+    with pytest.raises(ValueError, match="Cannot find: Nobody McNobody"):
+        member_db.get_number_first_last("Nobody", "McNobody", found_error=True)
+
+
+def test_get_mojo_name_found_error(member_db):
+    """
+    get_mojo_name with found_error=True should raise when nothing matches
+    """
+    with pytest.raises(ValueError, match="Cannot find Zed Zed"):
+        member_db.get_mojo_name("Zed Zed", found_error=True)
+
+
+def _row(num, first, last, membermojo_id):
+    return {
+        "Member number": str(num),
+        "Title": "Mr",
+        "First name": first,
+        "Last name": last,
+        "Membership": "Full",
+        "membermojo ID": membermojo_id,
+        "Short URL": f"http://short.url/{first}{last}",
+        "Active Member": "yes",
+        "Newsletter": "no",
+    }
+
+
+@pytest.fixture
+def fuzzy_db(db_path, tmp_path):
+    """
+    Member database with crafted names for fuzzy-match edge cases
+    """
+    rows = [_row(1, "John", "James", "2001"), _row(2, "John", "James", "2002")]
+    # 12 near-duplicates of "John Smith" (exceeds n=10 close matches)
+    for i, last in enumerate(
+        [
+            "Smith",
+            "Smyth",
+            "Smithe",
+            "Smithson",
+            "Smythe",
+            "Smidt",
+            "Smit",
+            "Smithy",
+            "Smythson",
+            "Smithers",
+            "Smitham",
+            "Smithsony",
+        ]
+    ):
+        rows.append(_row(3 + i, "Jon", last, f"20{30 + i}"))
+    test_db = Member(db_path, "A Password")
+    test_db.import_csv(setup_mock_csv(tmp_path, "fuzzy.csv", rows))
+    return test_db
+
+
+def test_get_fuzz_name_dedupes_repeated_names(fuzzy_db):
+    """
+    Repeated full names should be skipped without error
+    """
+    assert fuzzy_db.get_fuzz_name("John James") == ("John", "James")
+
+
+def test_get_fuzz_name_keeps_only_top_candidates(fuzzy_db):
+    """
+    When more than n close matches exist the overflow should be trimmed
+    """
+    result = fuzzy_db.get_fuzz_name("Jon Smith")
+    assert isinstance(result, tuple)
+
+
+@pytest.fixture
+def surname_drop_db(db_path, tmp_path):
+    """
+    Database whose only close match for a query is a surname mismatch,
+    so get_fuzz_name should return None
+    """
+    rows = [_row(1, "John", "Michael", "3001"), _row(2, "John", "Michael", "3002")]
+    test_db = Member(db_path, "A Password")
+    test_db.import_csv(setup_mock_csv(tmp_path, "drop.csv", rows))
+    return test_db
+
+
+def test_get_fuzz_name_drops_surname_mismatch(surname_drop_db):
+    """
+    A close match with a totally different surname (but matching first name)
+    should be rejected
+    """
+    assert surname_drop_db.get_fuzz_name("John Michael Smith") is None

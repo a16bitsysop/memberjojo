@@ -38,7 +38,7 @@ class URL:
             "expired" -> expired members
             "archived" -> archived members
         """
-        if state not in {"", "expired", "archived"}:
+        if state not in {"", "active", "expired", "archived"}:
             raise ValueError(f"Invalid member state: {state}")
 
         if state == "active":
