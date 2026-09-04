@@ -6,10 +6,12 @@ from datetime import date
 from decimal import Decimal
 from unittest import mock
 
+import pytest
+
 from memberjojo.mojo_common import MojoSkel
 from memberjojo.sql_query import DateRange, Like
 
-from .utils import setup_mock_csv
+from .utils import get_sample_members, setup_mock_csv
 
 # pylint: disable=redefined-outer-name
 
@@ -157,3 +159,87 @@ def test_row_to_obj_converts_decimal_and_date(tmp_path):
     assert row.amount == Decimal("10.50")
     assert isinstance(row.sold, date)
     assert row.sold == date(2023, 4, 1)
+
+
+def test_import_csv_failure_preserves_existing_table(tmp_path):
+    """
+    A failed import must not destroy the previously imported data
+    """
+    m = _mojo(tmp_path)
+    m.import_csv(setup_mock_csv(tmp_path, "good.csv", [{"id": "1", "name": "Alice"}]))
+    assert m.count() == 1
+
+    empty_csv = tmp_path / "empty.csv"
+    empty_csv.write_text("", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="CSV file is empty."):
+        m.import_csv(empty_csv)
+
+    # Existing table untouched, and no *_{old,new} left behind
+    assert m.count() == 1
+    assert list(m)[0].name == "Alice"
+    leftovers = {
+        row[0]
+        for row in m.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND (name='members' OR name='members_old' OR name='members_new')"
+        )
+    }
+    assert leftovers == {"members"}
+
+
+def test_download_csv_empty_preserves_existing_table(tmp_path):
+    """
+    A download that yields an empty CSV must leave any existing table untouched
+    """
+    m = _mojo(tmp_path)
+    m.import_csv(setup_mock_csv(tmp_path, "base.csv", [{"id": "1", "name": "Alice"}]))
+    assert m.count() == 1
+
+    session = mock.Mock()
+    resp = mock.MagicMock()
+    # Headers only → no data rows → treated as empty
+    resp.iter_content.return_value = iter(["id,name\n"])
+    resp.__enter__.return_value = resp
+    resp.raise_for_status.return_value = None
+    session.get.return_value = resp
+
+    m.download_csv(session, "https://example.com/members.csv")
+
+    assert m.count() == 1
+    assert list(m)[0].name == "Alice"
+    leftovers = {
+        row[0]
+        for row in m.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND (name='members' OR name='members_old' OR name='members_new')"
+        )
+    }
+    assert leftovers == {"members"}
+
+
+def test_import_creates_indexes_on_hot_columns(tmp_path):
+    """
+    Importing member data should create COLLATE NOCASE indexes on hot columns,
+    and re-importing must recreate them under the canonical table name
+    """
+    m = _mojo(tmp_path)
+    m.import_csv(setup_mock_csv(tmp_path, "members.csv", get_sample_members()))
+
+    cur = m.conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='members'"
+    )
+    index_names = {row[0] for row in cur.fetchall()}
+    assert {"members__member_number", "members__first_name", "members__last_name"} <= (
+        index_names
+    )
+
+    # Re-import (non-merge) recreates the indexes on the promoted table
+    m.import_csv(setup_mock_csv(tmp_path, "members2.csv", get_sample_members()))
+    cur = m.conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='members'"
+    )
+    index_names = {row[0] for row in cur.fetchall()}
+    assert {"members__member_number", "members__first_name", "members__last_name"} <= (
+        index_names
+    )

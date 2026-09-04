@@ -71,7 +71,7 @@ def test_pending_properties(url):
     Each pending download endpoint should be exposed as a property
     """
     assert (
-        url.pending_aproval
+        url.pending_approval
         == "https://membermojo.co.uk/myshortname/membership/download_pending_approval_members"
     )
     assert (
@@ -82,6 +82,13 @@ def test_pending_properties(url):
         url.pending_payments
         == "https://membermojo.co.uk/myshortname/membership/download_pending_payments"
     )
+
+
+def test_pending_aproval_alias(url):
+    """
+    The old misspelled pending_aproval property is kept as a deprecated alias
+    """
+    assert url.pending_aproval == url.pending_approval
 
 
 def test_test_property(url):

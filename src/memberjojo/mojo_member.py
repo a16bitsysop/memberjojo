@@ -8,7 +8,8 @@ stores it in SQLite, and provides helper functions for member lookups
 from difflib import SequenceMatcher
 from pathlib import Path
 from pprint import pprint
-from typing import Optional
+from typing import Any
+
 from .mojo_common import MojoSkel
 
 
@@ -30,7 +31,7 @@ class Member(MojoSkel):
         member_db_path: str | Path,
         db_key: str,
         table_name: str = "members",
-    ):
+    ) -> None:
         """
         Initialize the Member database handler
         """
@@ -81,7 +82,7 @@ class Member(MojoSkel):
 
     def get_number_first_last(
         self, first_name: str, last_name: str, found_error: bool = False
-    ) -> Optional[int]:
+    ) -> int | None:
         """
         Find a member number based on first and last name (case-insensitive)
 
@@ -96,7 +97,8 @@ class Member(MojoSkel):
         sql = f"""
             SELECT "member_number"
             FROM "{self.table_name}"
-            WHERE LOWER("first_name") = LOWER(?) AND LOWER("last_name") = LOWER(?)
+            WHERE "first_name" = ? COLLATE NOCASE
+              AND "last_name" = ? COLLATE NOCASE
         """
         self.cursor.execute(sql, (first_name, last_name))
         result = self.cursor.fetchone()
@@ -105,16 +107,18 @@ class Member(MojoSkel):
             pprint(sql)
             print(f"First Name: {first_name} Last Name: {last_name}")
             print("Result:")
-            pprint(result[0])
+            pprint(result[0] if result is not None else None)
 
         if not result and found_error:
             raise ValueError(
                 f"❌ Cannot find: {first_name} {last_name} in member database."
             )
 
-        return result[0] if result else None
+        if result is None:
+            return None
+        return int(result[0])
 
-    def get_number(self, full_name: str, found_error: bool = False) -> Optional[int]:
+    def get_number(self, full_name: str, found_error: bool = False) -> int | None:
         """
         Find a member number by passed full_name
         Tries first and last, and then middle last if 3 words,
@@ -136,7 +140,7 @@ class Member(MojoSkel):
             return self.get_number_first_last(result[0], result[1])
         return None
 
-    def _lookup_exact(self, first_name: str, last_name: str) -> Optional[tuple]:
+    def _lookup_exact(self, first_name: str, last_name: str) -> tuple[str, str] | None:
         """
         Lookup first_name and last_name in the member database, return found name or none
 
@@ -148,14 +152,14 @@ class Member(MojoSkel):
         sql = f"""
                 SELECT "first_name", "last_name"
                 FROM "{self.table_name}"
-                WHERE LOWER("first_name") = LOWER(?)
-                    AND LOWER("last_name")  = LOWER(?)
+                WHERE "first_name" = ? COLLATE NOCASE
+                    AND "last_name"  = ? COLLATE NOCASE
         """
         self.cursor.execute(sql, (first_name, last_name))
         row = self.cursor.fetchone()
         return (row["first_name"], row["last_name"]) if row else None
 
-    def _lookup_initial(self, letter: str, last_name: str) -> Optional[tuple]:
+    def _lookup_initial(self, letter: str, last_name: str) -> tuple[str, str] | None:
         """
         Lookup Initial and last_name in the member database, return found name or none
 
@@ -167,8 +171,8 @@ class Member(MojoSkel):
         sql = f"""
                 SELECT "first_name", "last_name"
                 FROM "{self.table_name}"
-                WHERE LOWER("first_name") LIKE LOWER(?) || '%'
-                    AND LOWER("last_name") = LOWER(?)
+                WHERE "first_name" LIKE ? || '%' COLLATE NOCASE
+                    AND "last_name" = ? COLLATE NOCASE
                 LIMIT 1
         """
         self.cursor.execute(sql, (letter, last_name))
@@ -177,7 +181,7 @@ class Member(MojoSkel):
 
     def get_mojo_name(
         self, full_name: str, found_error: bool = False
-    ) -> Optional[tuple]:
+    ) -> tuple[str, str] | None:
         """
         Resolve a member name from a free-text full name
 
@@ -261,7 +265,7 @@ class Member(MojoSkel):
 
         return None
 
-    def get_first_last_name(self, member_number: int) -> Optional[tuple[str, str]]:
+    def get_first_last_name(self, member_number: int) -> tuple[str, str] | None:
         """
         Get first and last name for a given member number
 
@@ -277,9 +281,11 @@ class Member(MojoSkel):
         self.cursor.execute(sql, (member_number,))
         result = self.cursor.fetchone()
 
-        return result if result else None
+        if result is None:
+            return None
+        return (result["first_name"], result["last_name"])
 
-    def get_name(self, member_number: int) -> Optional[str]:
+    def get_name(self, member_number: int) -> str | None:
         """
         Get full name for a given member number
 
@@ -295,7 +301,9 @@ class Member(MojoSkel):
             return f"{first_name} {last_name}"
         return None
 
-    def get_fuzz_name(self, name: str, found_error: bool = False):
+    def get_fuzz_name(
+        self, name: str, found_error: bool = False
+    ) -> tuple[str, str] | None:
         # pylint: disable=too-many-locals
         """
         Fuzzy search for members by name using partial matching
@@ -322,8 +330,11 @@ class Member(MojoSkel):
         s.set_seq2(name)
         # best holds (ratio, full_name) tuples, the (up to) n largest by tuple
         # comparison, matching heapq.nlargest (ties broken on full_name).
-        best = []
-        seen = set()
+        best: list[tuple[float, str]] = []
+        seen: set[str] = set()
+        # Keep the first matching row per gated candidate so the fallback
+        # selection below does not need a second query per candidate.
+        candidate_rows: dict[str, Any] = {}
 
         self.cursor.execute(
             f'SELECT *, LOWER(first_name || " " || last_name) AS full FROM "{self.table_name}"'
@@ -344,21 +355,17 @@ class Member(MojoSkel):
             ):
                 continue
 
+            candidate_rows.setdefault(full, row)
             best.append((s.ratio(), full))
             best.sort()
             if len(best) > n:
                 # Remove smallest by (ratio, full_name) tuple comparison
-                best.pop(0)
+                _, dropped = best.pop(0)
+                candidate_rows.pop(dropped, None)
 
         # Process candidates best-first (mirrors get_close_matches ordering)
         for _ratio, full in reversed(best):
-            rows = self.cursor.execute(
-                f'SELECT *, LOWER(first_name || " " || last_name) AS full '
-                f'FROM "{self.table_name}" WHERE LOWER(first_name || " " || last_name) = ?',
-                (full,),
-            )
-            # Use the first matching row for a given full name (dedup)
-            row = next(iter(rows))
+            row = candidate_rows[full]
             if len(parts) >= 2:
                 input_first = parts[0]
                 input_last = parts[-1]

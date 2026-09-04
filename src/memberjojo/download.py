@@ -6,6 +6,7 @@ import getpass
 import re
 from http.cookiejar import CookieJar
 from pathlib import Path
+from typing import Any, cast
 import requests
 
 from .url import URL
@@ -16,7 +17,7 @@ from .mojo_transaction import Transaction
 class Download:
     """A class for managing Membermojo downloads"""
 
-    def __init__(self, shortname: str, cookie_jar: CookieJar):
+    def __init__(self, shortname: str, cookie_jar: CookieJar) -> None:
         """
         Initialise the class
 
@@ -26,9 +27,12 @@ class Download:
         self.url = URL(shortname)
         self.cookie_jar = cookie_jar
         self.session = requests.Session()
-        self.session.cookies = cookie_jar
+        # requests' Session.cookies is typed as RequestsCookieJar, but any
+        # http.cookiejar.CookieJar is accepted at runtime; cast keeps the
+        # original jar object so callers can save it afterwards.
+        self.session.cookies = cast(Any, cookie_jar)
 
-    def fill_login(self):
+    def fill_login(self) -> dict[str, str]:
         """
         Prompt for email and password to get login data
 
@@ -40,7 +44,9 @@ class Download:
         # Submit login form (this triggers verification email if needed)
         return {"email": email, "password": password}
 
-    def mojo_login(self, login_data: dict, email_verify: bool = False):
+    def mojo_login(
+        self, login_data: dict[str, str], email_verify: bool = False
+    ) -> None:
         """
         Login to membermojo, cookie jar should be saved afterwards with updated cookie
 
@@ -70,7 +76,7 @@ class Download:
                     "⚠️ Authentication Failed — email verification required."
                 )
 
-    def trigger_email(self, login_data: dict):
+    def trigger_email(self, login_data: dict[str, str]) -> None:
         """
         Triggers a login verification email, prompts the user for the verification URL,
         and then submits it to complete the login process.
@@ -122,7 +128,7 @@ class Download:
         member_db_path: str,
         payments_db_path: str,
         db_key: str,
-    ):
+    ) -> tuple[Member, Transaction]:
         """
         Download and link Membermojo data (current members and payments).
 
