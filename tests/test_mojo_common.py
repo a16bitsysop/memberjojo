@@ -218,6 +218,38 @@ def test_download_csv_empty_preserves_existing_table(tmp_path):
     assert leftovers == {"members"}
 
 
+def test_quote_identifier_validates_and_quotes(tmp_path):
+    """
+    quote_identifier should validate the column exists and return it quoted
+    """
+    m = _mojo(tmp_path)
+    m.import_csv(setup_mock_csv(tmp_path, "q.csv", [{"id": "1", "name": "Alice"}]))
+
+    assert m.quote_identifier("name") == '"name"'
+    with pytest.raises(ValueError, match="Unknown column 'nope'"):
+        m.quote_identifier("nope")
+
+
+def test_quote_identifier_caches_columns_and_invalidates(tmp_path):
+    """
+    The column set should be cached per table and invalidated on import
+    """
+    # pylint: disable=protected-access
+    m = _mojo(tmp_path)
+    m.import_csv(setup_mock_csv(tmp_path, "q.csv", [{"id": "1", "name": "Alice"}]))
+    assert not m._column_cache
+
+    assert m.quote_identifier("name") == '"name"'
+    assert m._column_cache["members"] == {"id", "name", "rowid"}
+
+    # Re-import with a new column drops the stale cache entry
+    m.import_csv(
+        setup_mock_csv(tmp_path, "q2.csv", [{"id": "1", "name": "Bob", "age": "1"}])
+    )
+    assert not m._column_cache
+    assert m.quote_identifier("age") == '"age"'
+
+
 def test_import_creates_indexes_on_hot_columns(tmp_path):
     """
     Importing member data should create COLLATE NOCASE indexes on hot columns,

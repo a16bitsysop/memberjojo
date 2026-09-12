@@ -223,6 +223,39 @@ def test_get_fuzz_name_returns_correct_member(member_db):
     assert result == ("Emily", "Stone")
 
 
+def test_get_fuzz_name_silent_by_default(member_db, capsys):
+    """
+    Fuzzy match produces no output unless debug mode is enabled.
+    """
+    result = member_db.get_fuzz_name("Jon Do")
+    captured = capsys.readouterr()
+    assert result == ("John", "Doe")
+    assert captured.out == ""
+
+
+def test_get_fuzz_name_debug_prints_extra_info(member_db, capsys):
+    """
+    In debug mode the match and extra details are printed.
+    """
+    member_db.debug = True
+    member_db.get_fuzz_name("Jon Do")
+    captured = capsys.readouterr()
+    assert "Jon Do" in captured.out
+    assert "John Doe" in captured.out
+    assert "Match ratio" in captured.out
+    assert "Candidates considered" in captured.out
+
+
+def test_get_fuzz_name_no_match_debug_prints_message(member_db, capsys):
+    """
+    In debug mode a lookup with no match reports that nothing was found.
+    """
+    member_db.debug = True
+    assert member_db.get_fuzz_name("xyz123notfound") is None
+    captured = capsys.readouterr()
+    assert "No fuzzy name match found" in captured.out
+
+
 def test_get_fuzz_name_prevents_false_positive_different_surname(member_db):
     """
     Test get_fuzz_name does not match a person with a different surname just because
@@ -337,6 +370,34 @@ def test_get_fuzz_name_keeps_only_top_candidates(fuzzy_db):
     """
     result = fuzzy_db.get_fuzz_name("Jon Smith")
     assert isinstance(result, tuple)
+
+
+def test_get_fuzz_name_caches_name_index(member_db):
+    """
+    The name index is built once and reused across fuzzy lookups.
+    """
+    # pylint: disable=protected-access
+    assert member_db._name_index is None
+    member_db.get_fuzz_name("Jon Do")
+    assert member_db._name_index is not None
+    member_db.get_fuzz_name("Jon Do")
+    assert member_db._name_index is not None
+
+
+def test_get_fuzz_name_cache_invalidated_on_import(member_db, tmp_path):
+    """
+    Importing new members drops the cached index so they are findable.
+    """
+    # pylint: disable=protected-access
+    member_db.get_fuzz_name("Jon Do")
+    assert member_db._name_index is not None
+
+    rows = get_sample_members()
+    rows.append(_row(6, "Nobody", "McNelson", "2006"))
+    member_db.import_csv(setup_mock_csv(tmp_path, "more.csv", rows))
+
+    assert member_db._name_index is None
+    assert member_db.get_fuzz_name("nobody mcne") == ("Nobody", "McNelson")
 
 
 @pytest.fixture

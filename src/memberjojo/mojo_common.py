@@ -24,6 +24,7 @@ except ImportError:
     HAS_SQLCIPHER = False
 
 from . import mojo_loader
+from .mojo_loader import _quote as _q
 from .sql_query import Like, DateRange
 
 # Rows are dynamic dataclasses built from the table schema at runtime, so
@@ -32,6 +33,7 @@ RowType: TypeAlias = Any
 
 
 class MojoSkel:
+    # pylint: disable=too-many-instance-attributes
     """
     Establishes a connection to a SQLite database and provides helper methods
     for querying tables
@@ -53,6 +55,7 @@ class MojoSkel:
         self.table_name = table_name
         self.db_key = db_key
         self.debug = False
+        self._column_cache: dict[str, set[str]] = {}
 
         # Open connection
         self.conn = sqlite3.connect(self.db_path)  # pylint: disable=no-member
@@ -282,31 +285,6 @@ class MojoSkel:
         if self.table_exists():
             mojo_loader.create_indexes(self.conn, self.table_name)
 
-    def rename_old_table(self, existing: bool) -> str:
-        """
-        If there was an exising table rename for comparison
-
-        :param existing: bool for table exists
-
-        :return: the old table name
-        """
-        old_table = f"{self.table_name}_old"
-        self.conn.execute(f'DROP TABLE IF EXISTS "{old_table}"')
-        # Preserve existing table
-        if existing:
-            # Check if it's a view, views can't be renamed
-            self.cursor.execute(
-                "SELECT type FROM sqlite_master WHERE name=?", (self.table_name,)
-            )
-            result = self.cursor.fetchone()
-            if result and result[0] == "view":
-                self.conn.execute(f'DROP VIEW IF EXISTS "{self.table_name}"')
-            else:
-                self.conn.execute(
-                    f'ALTER TABLE "{self.table_name}" RENAME TO "{old_table}"'
-                )
-        return old_table
-
     def print_diff(self, old_table: str) -> None:
         """
         Print out diff between old and new db
@@ -349,6 +327,7 @@ class MojoSkel:
         if table_name:
             self.table_name = table_name
 
+        self._invalidate_caches()
         self._drop_stale_old()
         if merge:
             ok = mojo_loader.download_csv_helper(
@@ -390,6 +369,7 @@ class MojoSkel:
         if table_name:
             self.table_name = table_name
 
+        self._invalidate_caches()
         self._drop_stale_old()
         if merge:
             mojo_loader.import_csv_helper(
@@ -603,11 +583,21 @@ class MojoSkel:
         """
         self.create_joined_table(view_name, join_table, join_col, is_view=True)
 
+    def _invalidate_caches(self) -> None:
+        """
+        Drop in-memory caches derived from the current tables.
+
+        Subclasses may extend this to drop their own caches after the
+        underlying data changes.
+        """
+        self._column_cache.clear()
+
     def set_table(self, table_name: str) -> None:
         """
         Switch to a different table and update the row_class
         """
         self.table_name = table_name
+        self._invalidate_caches()
         if self.table_exists():
             self.row_class = self._build_dataclass_from_table()
         else:
@@ -691,18 +681,15 @@ class MojoSkel:
 
         :raises ValueError: If the column does not exist in the table
         """
-        self.cursor.execute(f'PRAGMA table_info("{self.table_name}")')
-        columns = {row[1] for row in self.cursor.fetchall()}
+        columns = self._column_cache.get(self.table_name)
+        if columns is None:
+            self.cursor.execute(f'PRAGMA table_info("{self.table_name}")')
+            columns = {row[1] for row in self.cursor.fetchall()}
+            self._column_cache[self.table_name] = columns
 
         if identifier not in columns:
             raise ValueError(
                 f"Unknown column '{identifier}' for table '{self.table_name}'"
             )
 
-        escaped = identifier.replace('"', '""')
-        return f'"{escaped}"'
-
-
-def _q(name: str) -> str:
-    """Return an identifier safely double-quoted for interpolation in SQL."""
-    return '"' + name.replace('"', '""') + '"'
+        return _q(identifier)

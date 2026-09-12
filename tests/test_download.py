@@ -206,15 +206,15 @@ def test_trigger_email_login_failed(download):
             download.trigger_email({"email": "e"})
 
 
-def test_trigger_email_verify_failed_writes_html(download, tmp_path, monkeypatch):
+def test_trigger_email_verify_failed_reports_only(download, tmp_path, monkeypatch):
     """
-    trigger_email should write verify.html when the verification response is not ok
+    trigger_email should report the failure without writing a file
     """
     download.session.cookies.clear()
     login_response = mock.Mock()
     login_response.text = "check your email"
     homepage = mock.Mock(text='{"csrf_token":"tok123"}')
-    verify_response = mock.Mock(ok=False, text="<html>fail</html>")
+    verify_response = mock.Mock(ok=False, status_code=500, text="<html>fail</html>")
 
     posts = {
         download.url.login: login_response,
@@ -224,7 +224,7 @@ def test_trigger_email_verify_failed_writes_html(download, tmp_path, monkeypatch
     def fake_post(url, data=None, **kwargs):  # pylint: disable=unused-argument
         return posts[url]
 
-    # Redirect verify.html writes into the tmp dir by changing cwd
+    # Ensure any stray file write would land in the tmp dir, then assert none
     monkeypatch.chdir(tmp_path)
 
     with (
@@ -234,8 +234,7 @@ def test_trigger_email_verify_failed_writes_html(download, tmp_path, monkeypatch
     ):
         download.trigger_email({"email": "e"})
 
-    assert (tmp_path / "verify.html").exists()
-    assert (tmp_path / "verify.html").read_text(encoding="UTF-8") == "<html>fail</html>"
+    assert not (tmp_path / "verify.html").exists()
 
 
 def test_download_membermojo(download):

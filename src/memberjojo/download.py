@@ -5,7 +5,6 @@ A class for downloading from membermojo
 import getpass
 import re
 from http.cookiejar import CookieJar
-from pathlib import Path
 from typing import Any, cast
 import requests
 
@@ -114,10 +113,7 @@ class Download:
             if verify_response.ok:
                 print("✅ Verification successful. You're now logged in.")
             else:
-                print("⚠️ Verification may have failed.")
-                verify_html = Path("verify.html")
-                with verify_html.open("w", encoding="UTF-8") as f:
-                    f.write(verify_response.text)
+                print(f"⚠️ Verification failed (HTTP {verify_response.status_code}).")
 
         else:
             print(response.text)
