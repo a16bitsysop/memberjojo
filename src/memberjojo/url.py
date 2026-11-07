@@ -6,7 +6,7 @@ A class for managing Membermojo URLs
 class URL:
     """A class for managing Membermojo URLs"""
 
-    def __init__(self, shortname: str):
+    def __init__(self, shortname: str) -> None:
         """
         Ininitalise the class
 
@@ -38,7 +38,7 @@ class URL:
             "expired" -> expired members
             "archived" -> archived members
         """
-        if state not in {"", "expired", "archived"}:
+        if state not in {"", "active", "expired", "archived"}:
             raise ValueError(f"Invalid member state: {state}")
 
         if state == "active":
@@ -47,41 +47,46 @@ class URL:
         return f"{self.membership}/download{suffix}_members"
 
     @property
-    def login(self):
+    def login(self) -> str:
         """Returns the membermojo login URL"""
         return self.make_url("signin_password")
 
     @property
-    def membership(self):
+    def membership(self) -> str:
         """Returns the URL for membership"""
         return self.make_url("membership")
 
     @property
-    def completed_payments(self):
+    def completed_payments(self) -> str:
         """Returns the completed payments download URL"""
         return f"{self.membership}/download_completed_payments?state=CO"
 
     @property
-    def payment_items(self):
+    def payment_items(self) -> str:
         """Returns the payment items download URL"""
         return f"{self.membership}/download_payment_items"
 
     @property
-    def pending_aproval(self):
+    def pending_approval(self) -> str:
         """Returns the members pending approval URL"""
         return f"{self.membership}/download_pending_approval_members"
 
     @property
-    def pending_completion(self):
+    def pending_aproval(self) -> str:
+        """Deprecated alias for :attr:`pending_approval` (was misspelled)."""
+        return self.pending_approval
+
+    @property
+    def pending_completion(self) -> str:
         """Returns the members pending completion URL"""
         return f"{self.membership}/download_pending_completion_members"
 
     @property
-    def pending_payments(self):
+    def pending_payments(self) -> str:
         """Returns the members pending payments URL"""
         return f"{self.membership}/download_pending_payments"
 
     @property
-    def test(self):
+    def test(self) -> str:
         """Returns the test URL for login verification"""
         return self.membership

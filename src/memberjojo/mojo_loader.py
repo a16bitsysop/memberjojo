@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
-from typing import Any, IO, Tuple
+from typing import Any, cast
 
 import re
 import sqlite3 as sqlite3_builtin
@@ -27,7 +27,24 @@ class DiffRow:
     """
 
     diff_type: str
-    preview: Tuple[Any, ...]
+    preview: tuple[Any, ...]
+
+
+# Columns that benefit from an index when the column is present.
+# Tables are recreated on each non-merge import, so indexes are recreated
+# against the canonical table name afterwards (see MojoSkel._ensure_indexes).
+INDEXABLE_COLUMNS = (
+    "member_number",
+    "first_name",
+    "last_name",
+    "membership",
+    "payment_id",
+)
+
+
+def _quote(name: str) -> str:
+    """Return an identifier safely double-quoted for interpolation in SQL."""
+    return '"' + name.replace('"', '""') + '"'
 
 
 # -----------------------
@@ -82,7 +99,7 @@ def parse_date(value: Any) -> datetime | None:
     return None
 
 
-def _guess_type(value: any) -> str:
+def _guess_type(value: Any) -> str:
     """
     Guess SQLite data type of a CSV value: 'INTEGER', 'REAL', 'DATE', or 'TEXT'
 
@@ -111,7 +128,7 @@ def _guess_type(value: any) -> str:
             return "TEXT"
 
 
-def infer_columns_from_rows(rows: list[dict]) -> dict[str, str]:
+def infer_columns_from_rows(rows: list[dict[str, Any]]) -> dict[str, str]:
     """
     Infer column types from CSV rows
     Returns mapping: normalized column name -> SQLite type
@@ -120,7 +137,7 @@ def infer_columns_from_rows(rows: list[dict]) -> dict[str, str]:
 
     :return: dict of name, type for columns
     """
-    type_counters = defaultdict(Counter)
+    type_counters: dict[str, Counter[str]] = defaultdict(Counter[str])
 
     for row in rows:
         for key, value in row.items():
@@ -162,14 +179,16 @@ def _create_table_from_columns(table_name: str, columns: dict[str, str]) -> str:
     col_defs = ["rowid INTEGER PRIMARY KEY AUTOINCREMENT"]
 
     for col, col_type in columns.items():
-        col_defs.append(f'"{col}" {col_type}')
+        col_defs.append(f"{_quote(col)} {col_type}")
 
     return (
-        f'CREATE TABLE IF NOT EXISTS "{table_name}" (\n' + ",\n".join(col_defs) + "\n)"
+        f"CREATE TABLE IF NOT EXISTS {_quote(table_name)} (\n"
+        + ",\n".join(col_defs)
+        + "\n)"
     )
 
 
-def table_exists(cursor, table_name: str) -> bool:
+def table_exists(cursor: sqlite3_builtin.Cursor, table_name: str) -> bool:
     """
     Return True or False if a table exists
 
@@ -185,16 +204,54 @@ def table_exists(cursor, table_name: str) -> bool:
     return cursor.fetchone() is not None
 
 
+def create_indexes(conn: sqlite3_builtin.Connection, table_name: str) -> None:
+    """
+    Create COLLATE NOCASE indexes on present hot lookup columns.
+
+    Indexes are created for the canonical table name so they survive a
+    staging-table rename and match the case-insensitive lookups in
+    `mojo_member`.
+
+    :param conn: SQLite database connection to use
+    :param table_name: Name of the table to index
+    """
+    cursor = conn.cursor()
+    try:
+        cursor.execute(f"PRAGMA table_info({_quote(table_name)})")
+        existing = {row[1] for row in cursor.fetchall()}
+        for col in INDEXABLE_COLUMNS:
+            if col in existing:
+                cursor.execute(
+                    f"CREATE INDEX IF NOT EXISTS {_quote(table_name + '__' + col)} "
+                    f"ON {_quote(table_name)} ({_quote(col)} COLLATE NOCASE)"
+                )
+    finally:
+        cursor.close()
+        conn.commit()
+
+
 # -----------------------
 # CSV Import
 # -----------------------
 
 
-def _process_row(row: dict, cols: list, norm_map: dict, inferred_cols: dict) -> list:
+def _process_row(
+    row: dict[str, Any],
+    cols: list[str],
+    norm_map: dict[str, str],
+    inferred_cols: dict[str, str],
+) -> list[str | None]:
     """
     Process a CSV row, converting dates and handling empty values.
+
+    :param row: A single CSV row
+    :param cols: The (raw header) column names in insertion order
+    :param norm_map: Mapping of raw header to normalized column name
+    :param inferred_cols: Normalized column name to SQLite type mapping
+
+    :return: The processed values, with dates normalised to YYYY-MM-DD
     """
-    values = []
+    values: list[Any] = []
     for c in cols:
         val = row[c]
         if val == "" or val is None:
@@ -210,7 +267,12 @@ def _process_row(row: dict, cols: list, norm_map: dict, inferred_cols: dict) -> 
     return values
 
 
-def import_data(conn, table_name: str, reader: list[dict], merge: bool = False):
+def import_data(
+    conn: sqlite3_builtin.Connection,
+    table_name: str,
+    reader: list[dict[str, Any]],
+    merge: bool = False,
+) -> None:
     """
     Import data in the list of dicts into the SQLite3 database at conn
 
@@ -224,7 +286,7 @@ def import_data(conn, table_name: str, reader: list[dict], merge: bool = False):
     inferred_cols = infer_columns_from_rows(reader)
     if not merge or not table_exists(cursor, table_name):
         # Drop existing table
-        cursor.execute(f'DROP TABLE IF EXISTS "{table_name}";')
+        cursor.execute(f"DROP TABLE IF EXISTS {_quote(table_name)};")
         # Create table
         create_sql = _create_table_from_columns(table_name, inferred_cols)
         cursor.execute(create_sql)
@@ -232,9 +294,11 @@ def import_data(conn, table_name: str, reader: list[dict], merge: bool = False):
     # Insert rows
     cols = list(reader[0].keys())
     norm_map = {c: _normalize(c) for c in cols}
-    colnames = ",".join(f'"{norm_map[c]}"' for c in cols)
+    colnames = ",".join(_quote(norm_map[c]) for c in cols)
     placeholders = ",".join("?" for _ in cols)
-    insert_sql = f'INSERT INTO "{table_name}" ({colnames}) VALUES ({placeholders})'
+    insert_sql = (
+        f"INSERT INTO {_quote(table_name)} ({colnames}) VALUES ({placeholders})"
+    )
 
     for row in reader:
         values = _process_row(row, cols, norm_map, inferred_cols)
@@ -244,7 +308,12 @@ def import_data(conn, table_name: str, reader: list[dict], merge: bool = False):
     conn.commit()
 
 
-def import_csv_helper(conn, table_name: str, csv_path: Path, merge: bool = False):
+def import_csv_helper(
+    conn: sqlite3_builtin.Connection,
+    table_name: str,
+    csv_path: Path,
+    merge: bool = False,
+) -> None:
     """
     Import CSV into database using given cursor
     Column types inferred automatically
@@ -287,65 +356,33 @@ def _diffrow_from_sql_row(row: sqlite3_builtin.Row) -> DiffRow:
 
 
 def diff_cipher_tables(
-    conn,
+    conn: sqlite3_builtin.Connection,
     *,
     new_table: str,
     old_table: str,
+    key: str | None = None,
 ) -> list[DiffRow]:
     """
-    Copy old and new tables from SQLCipher into a single
-    in-memory sqlite3 database and diff them there.
+    Diff the old and new tables directly on the given connection.
 
-    :param conn: sqlite connection to the db
+    Both tables already live in the same database (SQLCipher or plain
+    SQLite), so the diff is computed there without materialising either
+    table into memory.
+
+    :param conn: sqlite connection (SQLCipher or plain) holding both tables
     :param new_table: name of the new table for comparison
     :param old_table: name of the old table for comparison
+    :param key: (optional) column to use as the join key for the diff.
+        Defaults to the first common column.
 
     :return: a list of DiffRow entries of the changed rows
     """
-
-    plain = sqlite3_builtin.connect(":memory:")
-    plain.row_factory = sqlite3_builtin.Row
-
-    try:
-        for table in (old_table, new_table):
-            # Clone schema using SQLite itself
-            schema_sql = conn.execute(
-                """
-                SELECT sql
-                FROM sqlite_master
-                WHERE type='table' AND name=?
-                """,
-                (table,),
-            ).fetchone()
-
-            if schema_sql is None:
-                raise RuntimeError(f"Table {table!r} not found in cipher DB")
-
-            plain.execute(schema_sql[0])
-
-            # 2. Copy data
-            rows = conn.execute(f"SELECT * FROM {table}")
-            cols = [d[0] for d in rows.description]
-
-            col_list = ", ".join(cols)
-            placeholders = ", ".join("?" for _ in cols)
-
-            plain.executemany(
-                f"INSERT INTO {table} ({col_list}) VALUES ({placeholders})",
-                rows.fetchall(),
-            )
-
-        # 3. Run sqlite-only diff
-        rows = _generate_sql_diff(
-            plain,
-            new_table=new_table,
-            old_table=old_table,
+    return [
+        _diffrow_from_sql_row(r)
+        for r in _generate_sql_diff(
+            conn, new_table=new_table, old_table=old_table, key=key
         )
-
-        return [_diffrow_from_sql_row(r) for r in rows]
-
-    finally:
-        plain.close()
+    ]
 
 
 def _generate_sql_diff(
@@ -353,6 +390,7 @@ def _generate_sql_diff(
     *,
     new_table: str,
     old_table: str,
+    key: str | None = None,
 ) -> list[sqlite3_builtin.Row]:
     """
     Generate a diff between two tables using standard SQLite features
@@ -361,19 +399,25 @@ def _generate_sql_diff(
     - Returned row shape:
             (diff_type, preview_col1, preview_col2, preview_col3, ...)
 
-    :param conn: sqlite connection to the db, using python builtin sqlite
+    :param conn: sqlite connection to the db, SQLCipher or plain
     :param new_table: name of the new table to use for comparison
     :param old_table: name of the old table to use for comparison
+    :param key: (optional) column to use as the join key for the diff.
+        Defaults to the first common column (excluding rowid).
 
     :return: list of sqlite rows that are changed
     """
+    # pylint: disable=too-many-locals
+
+    new_q = _quote(new_table)
+    old_q = _quote(old_table)
 
     # Introspect schemas (order-preserving)
     cols_new = [
-        row[1] for row in conn.execute(f"PRAGMA table_info({new_table})").fetchall()
+        row[1] for row in conn.execute(f"PRAGMA table_info({new_q})").fetchall()
     ]
     cols_old = [
-        row[1] for row in conn.execute(f"PRAGMA table_info({old_table})").fetchall()
+        row[1] for row in conn.execute(f"PRAGMA table_info({old_q})").fetchall()
     ]
 
     if not cols_new:
@@ -387,22 +431,31 @@ def _generate_sql_diff(
     if not common_cols:
         raise RuntimeError(f"No common columns between {new_table} and {old_table}")
 
-    # First column of common columns is key, others are for comparison
-    key = common_cols[0]
-    non_key_cols = common_cols[1:]
+    # Explicit key if provided, otherwise default to the first common column
+    if key is not None:
+        if key not in common_cols:
+            raise RuntimeError(
+                f"Diff key {key!r} is not a common column between "
+                f"{new_table} and {old_table}"
+            )
+    else:
+        key = common_cols[0]
+
+    key_q = _quote(key)
+    non_key_cols = [c for c in common_cols if c != key]
 
     # Preview columns (key first, then others for readability)
     preview_cols = [key] + non_key_cols[:5]
 
-    new_preview = ", ".join(f"n.{c}" for c in preview_cols)
-    old_preview = ", ".join(f"o.{c}" for c in preview_cols)
+    new_preview = ", ".join(f"n.{_quote(c)}" for c in preview_cols)
+    old_preview = ", ".join(f"o.{_quote(c)}" for c in preview_cols)
 
     # Row-value comparison (NULL-safe)
     if non_key_cols:
         changed_predicate = (
-            f"({', '.join(f'n.{c}' for c in non_key_cols)}) "
+            f"({', '.join(f'n.{_quote(c)}' for c in non_key_cols)}) "
             f"IS NOT "
-            f"({', '.join(f'o.{c}' for c in non_key_cols)})"
+            f"({', '.join(f'o.{_quote(c)}' for c in non_key_cols)})"
         )
     else:
         # Key-only table
@@ -412,20 +465,20 @@ def _generate_sql_diff(
         WITH
             added AS (
                 SELECT 'added' AS diff_type, {new_preview}
-                FROM {new_table} n
-                LEFT JOIN {old_table} o USING ({key})
-                WHERE o.{key} IS NULL
+                FROM {new_q} n
+                LEFT JOIN {old_q} o USING ({key_q})
+                WHERE o.{key_q} IS NULL
             ),
             deleted AS (
                 SELECT 'deleted' AS diff_type, {old_preview}
-                FROM {old_table} o
-                LEFT JOIN {new_table} n USING ({key})
-                WHERE n.{key} IS NULL
+                FROM {old_q} o
+                LEFT JOIN {new_q} n USING ({key_q})
+                WHERE n.{key_q} IS NULL
             ),
             changed AS (
                 SELECT 'changed' AS diff_type, {new_preview}
-                FROM {new_table} n
-                JOIN {old_table} o USING ({key})
+                FROM {new_q} n
+                JOIN {old_q} o USING ({key_q})
                 WHERE {changed_predicate}
             )
         SELECT * FROM added
@@ -433,15 +486,19 @@ def _generate_sql_diff(
         SELECT * FROM deleted
         UNION ALL
         SELECT * FROM changed
-        ORDER BY {key};
+        ORDER BY {key_q};
         """
 
     return list(conn.execute(sql))
 
 
 def download_csv_helper(
-    conn, table_name: str, url: str, session: requests.Session, merge: bool = False
-) -> IO[str]:
+    conn: sqlite3_builtin.Connection,
+    table_name: str,
+    url: str,
+    session: requests.Session,
+    merge: bool = False,
+) -> bool:
     """
     Download url into a StringIO file object using streaming
     and import into database
@@ -451,6 +508,8 @@ def download_csv_helper(
     :param url: URL of the csv to download
     :param session: A requests session to use for the download
     :param merge: (optional) If True, merge into existing table. Defaults to False.
+
+    :return: True if the CSV was downloaded and imported, False if empty
     """
 
     print(f"☁️ Downloading from: {url}")
@@ -466,7 +525,8 @@ def download_csv_helper(
         # decode_unicode=True uses the encoding from the response headers
         for chunk in resp.iter_content(chunk_size=8192, decode_unicode=True):
             if chunk:
-                string_buffer.write(chunk)
+                # decode_unicode=True yields str chunks despite requests' typing
+                string_buffer.write(cast(str, chunk))
 
         # Reset pointer to the beginning for DictReader
         string_buffer.seek(0)

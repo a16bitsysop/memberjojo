@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """
-Reproduction script for the sqlite3.OperationalError: no such column issue
-when a new column is added to the CSV.
+Regression test for importing a CSV with an additional column.
+
+Importing a new CSV whose headers have grown must succeed (a diff is
+computed over the common columns) and must leave no stale `*_old` table.
 """
 
 from .utils import write_csv, setup_initial_db
 
 
-def test_add_column_to_csv_generates_error(tmp_path):
+def test_add_column_to_csv_generates_diff(tmp_path):
     """
     Test importing one CSV, then importing a CSV with an additional column,
-    and verify that it currently raises an OperationalError.
+    and verify the import succeeds, keeps the data, and cleans up the old table.
     """
     # 1. Original CSV & DB
     m, _ = setup_initial_db(tmp_path, "repro.db", "password")
@@ -24,5 +26,16 @@ def test_add_column_to_csv_generates_error(tmp_path):
     ]
     write_csv(csv2, updated_rows)
 
-    # This should trigger the diff and the error
+    # This must not raise: the diff runs over the common columns only.
     m.import_csv(csv2)
+
+    assert m.count() == 2
+    row = m.get_row_multi({"id": "1"})
+    assert row is not None
+    assert row.new_col == "val1"
+
+    # The old table is renamed for the diff and then dropped.
+    cur = m.conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='members_old'"
+    )
+    assert cur.fetchone() is None

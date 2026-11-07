@@ -26,7 +26,7 @@ Installing via `pip` on macos with optional `sqlcipher` installed via homebrew:\
 brew install sqlcipher
 export C_INCLUDE_PATH="/opt/homebrew/opt/sqlcipher/include"
 export LIBRARY_PATH="/opt/homebrew/opt/sqlcipher/lib"
-pip install memberjojo[sqlciper]
+pip install memberjojo[sqlcipher]
 ```
 
 Installing via `pip` on ubuntu:
@@ -56,7 +56,7 @@ Example loading members and using Member objects:
 
 ```python
 from pathlib import Path
-from membermojo import Member
+from memberjojo import Member
 
 # database is created if it does not exist
 member_database_path = Path(Path(__file__).parent, "database", "my-members.db")

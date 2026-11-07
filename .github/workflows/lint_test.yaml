@@ -27,6 +27,9 @@ jobs:
       - name: 🧹 Run pylint
         run: pylint .
 
+      - name: 🧹 Run mypy
+        run: mypy src
+
       - name: 🧪 Run pytest without sqlcipher
         run: |
           coverage run -m pytest

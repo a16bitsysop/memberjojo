@@ -2,8 +2,11 @@
 Tests for the transaction module
 """
 
+from unittest import mock
+
 import pytest
 from memberjojo import Transaction  # Update with your actual module name
+from memberjojo.mojo_common import MojoSkel
 from memberjojo.mojo_loader import _guess_type as guess_type
 from .utils import get_db_path, get_sample_transactions, setup_mock_csv
 
@@ -214,3 +217,24 @@ def test_get_row_fuzz_updated(payment_db):
     # No match
     row = payment_db.get_row_multi({"desc": "xyz"})
     assert row is None
+
+
+def test_download_csv_override(db_path):
+    """
+    Transaction.download_csv should delegate to MojoSkel.download_csv and relink
+    """
+    txn = Transaction(db_path, "Password1")
+    session = mock.Mock()
+
+    with (
+        mock.patch.object(MojoSkel, "download_csv") as mock_super_dc,
+        mock.patch.object(txn, "link_items") as mock_link,
+    ):
+        txn.download_csv(session, "https://example.com/payments.csv", merge=True)
+
+    assert mock_super_dc.call_count == 1
+    args, kwargs = mock_super_dc.call_args
+    assert args[0] == session
+    assert args[1] == "https://example.com/payments.csv"
+    assert kwargs["merge"] is True
+    mock_link.assert_called_once_with(force=True)

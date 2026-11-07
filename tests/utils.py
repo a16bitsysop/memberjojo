@@ -88,7 +88,9 @@ def get_sample_transactions() -> list[dict]:
     ]
 
 
-def setup_mock_csv(tmp_path: Path, filename: str, rows: list[dict] = None) -> Path:
+def setup_mock_csv(
+    tmp_path: Path, filename: str, rows: list[dict] | None = None
+) -> Path:
     """
     Create a mock CSV file in tmp_path.
     If rows is None, use get_sample_members().
