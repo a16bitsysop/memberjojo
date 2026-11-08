@@ -5,9 +5,11 @@ This module loads data from a `members.csv` file downloaded from Membermojo,
 stores it in SQLite, and provides helper functions for member lookups
 """
 
+import heapq
 from difflib import SequenceMatcher
 from pathlib import Path
 from pprint import pprint
+from typing import override
 
 from .mojo_common import MojoSkel
 
@@ -44,6 +46,7 @@ class Member(MojoSkel):
         super().__init__(member_db_path, db_key, table_name)
         self._name_index: list[tuple[str, str, str]] | None = None
 
+    @override
     def _invalidate_caches(self) -> None:
         """
         Drop the cached name index when the underlying table changes.
@@ -371,15 +374,12 @@ class Member(MojoSkel):
         # ratio cutoff, and ordering by the (ratio, full_name) tuple) without
         # re-scanning the whole table on every lookup.
         cutoff = NAME_RATIO_CUTOFF
-        n = MAX_CANDIDATES
         s = SequenceMatcher()
         s.set_seq2(name)
-        # best holds (ratio, full_name) tuples, the (up to) n largest by tuple
-        # comparison, matching heapq.nlargest (ties broken on full_name).
-        best: list[tuple[float, str]] = []
-        # Keep the names per gated candidate so the final selection below
-        # does not need a second pass over the index.
-        candidate_names: dict[str, tuple[str, str]] = {}
+        # Min-heap holding the MAX_CANDIDATES best entries. Full names are
+        # unique in the index, so ties are broken on full_name as in
+        # heapq.nlargest and the name fields are never compared.
+        best: list[tuple[float, str, str, str]] = []
 
         for full, first_name, last_name in self._get_name_index():
             s.set_seq1(full)
@@ -391,17 +391,16 @@ class Member(MojoSkel):
             ):
                 continue
 
-            candidate_names.setdefault(full, (first_name, last_name))
-            best.append((s.ratio(), full))
-            best.sort()
-            if len(best) > n:
-                # Remove smallest by (ratio, full_name) tuple comparison
-                _, dropped = best.pop(0)
-                candidate_names.pop(dropped, None)
+            entry = (s.ratio(), full, first_name, last_name)
+            if len(best) < MAX_CANDIDATES:
+                heapq.heappush(best, entry)
+            else:
+                heapq.heappushpop(best, entry)
 
         # Process candidates best-first (mirrors get_close_matches ordering)
-        for ratio, full in reversed(best):
-            cand_first, cand_last = candidate_names[full]
+        ranked = sorted(best, reverse=True)
+        scores = [(ratio, full) for ratio, full, _, _ in ranked]
+        for ratio, _full, cand_first, cand_last in ranked:
             if len(parts) >= 2:
                 input_first = parts[0]
                 input_last = parts[-1]
@@ -438,12 +437,12 @@ class Member(MojoSkel):
                     continue
 
             matched = (cand_first, cand_last)
-            self._report_fuzzy_match(original, matched, ratio, best)
+            self._report_fuzzy_match(original, matched, ratio, scores)
             return matched
 
         if self.debug:
             print(f"No fuzzy name match found for '{original}'.")
-            self._print_fuzzy_candidates(best)
+            self._print_fuzzy_candidates(scores)
         if found_error:
             raise ValueError(
                 f"❌ Cannot find {original} in member database with fuzzy match."

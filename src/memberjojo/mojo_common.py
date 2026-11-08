@@ -10,7 +10,8 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from pprint import pprint
-from typing import Any, Iterator, TypeAlias
+from collections.abc import Iterator
+from typing import Any
 
 import requests
 
@@ -29,7 +30,7 @@ from .sql_query import Like, DateRange
 
 # Rows are dynamic dataclasses built from the table schema at runtime, so
 # their concrete type is only known once the table has been loaded.
-RowType: TypeAlias = Any
+type RowType = Any
 
 
 class MojoSkel:
