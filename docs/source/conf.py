@@ -13,7 +13,7 @@ import memberjojo
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "memberjojo"
-copyright = "2025, Duncan Bellamy"
+copyright = "2026, Duncan Bellamy"
 author = "Duncan Bellamy"
 release = memberjojo.__version__
 
@@ -26,7 +26,6 @@ extensions = [
     "sphinx_autodoc_typehints",
 ]
 
-templates_path = ["_templates"]
 exclude_patterns = []
 
 # Do not add filename to docs for modules
