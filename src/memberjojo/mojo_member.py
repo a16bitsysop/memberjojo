@@ -6,12 +6,16 @@ stores it in SQLite, and provides helper functions for member lookups
 """
 
 import heapq
+import logging
 from difflib import SequenceMatcher
 from pathlib import Path
-from pprint import pprint
 from typing import override
 
 from .mojo_common import MojoSkel
+from .mojo_loader import quote_name
+from .sql_query import Like
+
+logger = logging.getLogger(__name__)
 
 # Fuzzy-match acceptance thresholds (mirror difflib.get_close_matches
 # defaults plus the per-field guards below).
@@ -19,6 +23,45 @@ NAME_RATIO_CUTOFF = 0.7
 LAST_NAME_RATIO_CUTOFF = 0.7
 FIRST_NAME_RATIO_CUTOFF = 0.6
 MAX_CANDIDATES = 10
+
+
+def _passes_name_guards(
+    input_first: str, input_last: str, cand_first: str, cand_last: str
+) -> bool:
+    """
+    Check a fuzzy candidate's first and last name against the per-field cutoffs
+
+    The input names are expected to be lowercase; candidate names are
+    lowercased here.
+
+    :param input_first: first name typed by the user
+    :param input_last: last name typed by the user
+    :param cand_first: first name of the candidate member
+    :param cand_last: last name of the candidate member
+
+    :return: True if the candidate is close enough on both names
+    """
+    first_lower = cand_first.lower()
+    last_lower = cand_last.lower()
+
+    last_ratio = SequenceMatcher(None, input_last, last_lower).ratio()
+
+    # Check prefix ratio for extra text appended to last name
+    # (e.g. EMILY STONMEMBERSHIP)
+    short_len = min(len(input_last), len(last_lower))
+    prefix_ratio = (
+        SequenceMatcher(None, input_last[:short_len], last_lower[:short_len]).ratio()
+        if short_len > 0
+        else 0
+    )
+    if last_ratio < LAST_NAME_RATIO_CUTOFF and prefix_ratio < LAST_NAME_RATIO_CUTOFF:
+        return False
+
+    first_ratio = SequenceMatcher(None, input_first, first_lower).ratio()
+    first_initial_match = (
+        bool(input_first) and bool(first_lower) and input_first[0] == first_lower[0]
+    )
+    return first_ratio >= FIRST_NAME_RATIO_CUTOFF or first_initial_match
 
 
 class Member(MojoSkel):
@@ -72,7 +115,9 @@ class Member(MojoSkel):
 
         names: list[tuple[str, str, str]] = []
         seen: set[str] = set()
-        self.cursor.execute(f'SELECT first_name, last_name FROM "{self.table_name}"')
+        self.cursor.execute(
+            f"SELECT first_name, last_name FROM {quote_name(self.table_name)}"
+        )
         for row in self.cursor:
             first_name = row["first_name"]
             last_name = row["last_name"]
@@ -98,7 +143,7 @@ class Member(MojoSkel):
         """
         sql = f"""
             SELECT {self.quote_identifier(entry_name)}
-            FROM "{self.table_name}"
+            FROM {quote_name(self.table_name)}
             WHERE "member_number" = ?
         """
         self.cursor.execute(sql, (member_number,))
@@ -125,8 +170,7 @@ class Member(MojoSkel):
 
         :return: Number of members that are `membership_type`
         """
-        query = "WHERE membership LIKE ?"
-        return self.run_count_query(query, (f"{membership_type}",))
+        return self.count_rows({"membership": Like(membership_type)})
 
     def get_number_first_last(
         self, first_name: str, last_name: str, found_error: bool = False
@@ -144,18 +188,16 @@ class Member(MojoSkel):
         """
         sql = f"""
             SELECT "member_number"
-            FROM "{self.table_name}"
+            FROM {quote_name(self.table_name)}
             WHERE "first_name" = ? COLLATE NOCASE
               AND "last_name" = ? COLLATE NOCASE
         """
         self.cursor.execute(sql, (first_name, last_name))
         result = self.cursor.fetchone()
         if self.debug:
-            print("Sql:")
-            pprint(sql)
-            print(f"First Name: {first_name} Last Name: {last_name}")
-            print("Result:")
-            pprint(result[0] if result is not None else None)
+            logger.debug("Sql: %r", sql)
+            logger.debug("First Name: %s Last Name: %s", first_name, last_name)
+            logger.debug("Result: %r", result[0] if result is not None else None)
 
         if not result and found_error:
             raise ValueError(
@@ -199,7 +241,7 @@ class Member(MojoSkel):
         """
         sql = f"""
                 SELECT "first_name", "last_name"
-                FROM "{self.table_name}"
+                FROM {quote_name(self.table_name)}
                 WHERE "first_name" = ? COLLATE NOCASE
                     AND "last_name"  = ? COLLATE NOCASE
         """
@@ -218,7 +260,7 @@ class Member(MojoSkel):
         """
         sql = f"""
                 SELECT "first_name", "last_name"
-                FROM "{self.table_name}"
+                FROM {quote_name(self.table_name)}
                 WHERE "first_name" LIKE ? || '%' COLLATE NOCASE
                     AND "last_name" = ? COLLATE NOCASE
                 LIMIT 1
@@ -323,7 +365,7 @@ class Member(MojoSkel):
         """
         sql = f"""
             SELECT "first_name", "last_name"
-            FROM "{self.table_name}"
+            FROM {quote_name(self.table_name)}
             WHERE "member_number" = ?
             """
         self.cursor.execute(sql, (member_number,))
@@ -401,47 +443,17 @@ class Member(MojoSkel):
         ranked = sorted(best, reverse=True)
         scores = [(ratio, full) for ratio, full, _, _ in ranked]
         for ratio, _full, cand_first, cand_last in ranked:
-            if len(parts) >= 2:
-                input_first = parts[0]
-                input_last = parts[-1]
-                first_lower = cand_first.lower()
-                last_lower = cand_last.lower()
-
-                last_ratio = SequenceMatcher(None, input_last, last_lower).ratio()
-
-                # Check prefix ratio for extra text appended to last name
-                # (e.g. EMILY STONMEMBERSHIP)
-                short_len = min(len(input_last), len(last_lower))
-                prefix_ratio = (
-                    SequenceMatcher(
-                        None, input_last[:short_len], last_lower[:short_len]
-                    ).ratio()
-                    if short_len > 0
-                    else 0
-                )
-
-                if (
-                    last_ratio < LAST_NAME_RATIO_CUTOFF
-                    and prefix_ratio < LAST_NAME_RATIO_CUTOFF
-                ):
-                    continue
-
-                first_ratio = SequenceMatcher(None, input_first, first_lower).ratio()
-                first_initial_match = (
-                    bool(input_first)
-                    and bool(first_lower)
-                    and input_first[0] == first_lower[0]
-                )
-
-                if first_ratio < FIRST_NAME_RATIO_CUTOFF and not first_initial_match:
-                    continue
+            if len(parts) >= 2 and not _passes_name_guards(
+                parts[0], parts[-1], cand_first, cand_last
+            ):
+                continue
 
             matched = (cand_first, cand_last)
             self._report_fuzzy_match(original, matched, ratio, scores)
             return matched
 
         if self.debug:
-            print(f"No fuzzy name match found for '{original}'.")
+            logger.debug("No fuzzy name match found for '%s'.", original)
             self._print_fuzzy_candidates(scores)
         if found_error:
             raise ValueError(
@@ -457,9 +469,9 @@ class Member(MojoSkel):
         candidates: list[tuple[float, str]],
     ) -> None:
         """
-        Print the outcome of a fuzzy name lookup when debug mode is on.
+        Log the outcome of a fuzzy name lookup at debug level when debug mode is on.
 
-        The match ratio and every candidate considered are printed for context.
+        The match ratio and every candidate considered are logged for context.
 
         :param original: Name passed to the fuzzy lookup
         :param matched: The matched (first_name, last_name) tuple
@@ -468,18 +480,18 @@ class Member(MojoSkel):
         """
         if not self.debug:
             return
-        print(f"Fuzzy name match: '{original}' -> '{' '.join(matched)}'")
-        print(f"  Match ratio: {ratio:.3f}")
+        logger.debug("Fuzzy name match: '%s' -> '%s'", original, " ".join(matched))
+        logger.debug("  Match ratio: %.3f", ratio)
         self._print_fuzzy_candidates(candidates)
 
     def _print_fuzzy_candidates(self, candidates: list[tuple[float, str]]) -> None:
         """
-        Print the candidate names and their ratio scores.
+        Log the candidate names and their ratio scores at debug level.
 
         :param candidates: All candidate (ratio, full_name) tuples considered
         """
         if not candidates:
             return
-        print("  Candidates considered:")
+        logger.debug("  Candidates considered:")
         for cand_ratio, cand_name in candidates:
-            print(f"    {cand_name}: {cand_ratio:.3f}")
+            logger.debug("    %s: %.3f", cand_name, cand_ratio)

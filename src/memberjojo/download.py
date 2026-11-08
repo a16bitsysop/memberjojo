@@ -3,6 +3,7 @@ A class for downloading from membermojo
 """
 
 import getpass
+import logging
 import re
 from http.cookiejar import CookieJar
 from typing import Any, cast
@@ -12,19 +13,26 @@ from .url import URL
 from .mojo_member import Member
 from .mojo_transaction import Transaction
 
+logger = logging.getLogger(__name__)
+
 
 class Download:
     """A class for managing Membermojo downloads"""
 
-    def __init__(self, shortname: str, cookie_jar: CookieJar) -> None:
+    def __init__(
+        self, shortname: str, cookie_jar: CookieJar, debug: bool = False
+    ) -> None:
         """
         Initialise the class
 
         :param shortname: the membermojo shortname
         :param cookie_jar: a CookieJar with the session cookie, or empty to get one
+        :param debug: (optional) If True, print sensitive responses such as the
+            CSRF token and failed login pages. Defaults to False.
         """
         self.url = URL(shortname)
         self.cookie_jar = cookie_jar
+        self.debug = debug
         self.session = requests.Session()
         # requests' Session.cookies is typed as RequestsCookieJar, but any
         # http.cookiejar.CookieJar is accepted at runtime; cast keeps the
@@ -56,19 +64,23 @@ class Download:
         :raises ValueError: If authentication fails and email_verify is False
         """
         if not self.session.cookies:
-            if email_verify:
-                print("🍪 No cookies saved, triggering email verification.")
-                self.trigger_email(login_data)
-            else:
+            if not email_verify:
                 raise ValueError("⚠️ No cookies found — email verification required.")
-        self.session.post(self.url.login, data=login_data)
+            # trigger_email already submits the login and the verification link,
+            # so posting the password again would send a second login attempt.
+            logger.info("🍪 No cookies saved, triggering email verification.")
+            self.trigger_email(login_data)
+        else:
+            self.session.post(self.url.login, data=login_data)
 
         # Attempt to access a protected page to verify login worked
-        print(f"Verifying login with: {self.url.test}")
+        logger.info("Verifying login with: %s", self.url.test)
         verify_response = self.session.get(self.url.test)
         if "<mm2-loginpage" in verify_response.text:
             if email_verify:
-                print("📧 Authentication failed, triggering email verification")
+                logger.warning(
+                    "📧 Authentication failed, triggering email verification"
+                )
                 self.trigger_email(login_data)
             else:
                 raise ValueError(
@@ -88,7 +100,9 @@ class Download:
         response = self.session.post(self.url.login, data=login_data)
 
         if "check your email" in response.text.lower() or response.ok:
-            print("✅ Login submitted — check your inbox for a verification link.")
+            logger.info(
+                "✅ Login submitted — check your inbox for a verification link."
+            )
 
             # Get CSRF token from homepage
             homepage = self.session.get(self.url.base_url)
@@ -97,7 +111,8 @@ class Download:
                 raise ValueError("❌ Could not find CSRF token.")
 
             csrf_token = match.group(1)
-            print(f"✅ CSRF token: {csrf_token}")
+            if self.debug:
+                logger.debug("✅ CSRF token: %s", csrf_token)
 
             # Ask user for the verification link
             verification_url = input(
@@ -111,12 +126,15 @@ class Download:
 
             # Output
             if verify_response.ok:
-                print("✅ Verification successful. You're now logged in.")
+                logger.info("✅ Verification successful. You're now logged in.")
             else:
-                print(f"⚠️ Verification failed (HTTP {verify_response.status_code}).")
+                logger.warning(
+                    "⚠️ Verification failed (HTTP %s).", verify_response.status_code
+                )
 
         else:
-            print(response.text)
+            if self.debug:
+                logger.debug("%s", response.text)
             raise ValueError("❌ Failed to submit login form.")
 
     def download_membermojo(
@@ -139,7 +157,9 @@ class Download:
         member_start = member_db.count()
         member_db.download_csv(self.session, self.url.members())
         member_added = member_db.count() - member_start
-        print(f"Member Database: Total: {member_db.count()}, Added: {member_added}")
+        logger.info(
+            "Member Database: Total: %s, Added: %s", member_db.count(), member_added
+        )
 
         # Download Payment Data
         payments_db = Transaction(payments_db_path, db_key)
@@ -154,10 +174,12 @@ class Download:
         )
 
         payment_added = payments_db.count() - payment_start
-        print(f"Payment Database: Total: {payments_db.count()}, Added: {payment_added}")
+        logger.info(
+            "Payment Database: Total: %s, Added: %s", payments_db.count(), payment_added
+        )
 
         # Link Payment Items to Completed Payments
         payments_db.link_items()
-        print("Linked completed_payments and payment_items via SQL Table.")
+        logger.info("Linked completed_payments and payment_items via SQL Table.")
 
         return member_db, payments_db

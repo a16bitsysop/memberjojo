@@ -1,3 +1,12 @@
+unreleased:
+  * merge imports skip rows whose membermojo_id is already in the table
+  * status and debug messages use logging (memberjojo.* loggers) instead of print
+  * add count_rows, replacing run_count_query which took raw SQL
+  * rename diff_cipher_tables to diff_tables and _quote to quote_name
+  * remove the misspelled pending_aproval url alias
+  * Download takes a debug flag; CSRF tokens and failed login pages are only logged in debug
+  * insert CSV rows with executemany
+  * mojo_login no longer posts the password a second time after triggering email verification
 4.0:
   * Use date objects in the member dataclass
   * add date range sql query

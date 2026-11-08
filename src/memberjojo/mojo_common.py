@@ -5,12 +5,12 @@ This module provides a common base class (`MojoSkel`) for other `memberjojo` mod
 It includes helper methods for working with SQLite databases
 """
 
+import logging
 from dataclasses import make_dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from pprint import pprint
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
 import requests
@@ -25,8 +25,10 @@ except ImportError:
     HAS_SQLCIPHER = False
 
 from . import mojo_loader
-from .mojo_loader import _quote as _q
+from .mojo_loader import quote_name
 from .sql_query import Like, DateRange
+
+logger = logging.getLogger(__name__)
 
 # Rows are dynamic dataclasses built from the table schema at runtime, so
 # their concrete type is only known once the table has been loaded.
@@ -84,16 +86,16 @@ class MojoSkel:
         """
         if not HAS_SQLCIPHER:
             if db_key:
-                print(
-                    "⚠️  sqlcipher3 is not installed — database "
-                    f"{self.db_path} will NOT be encrypted."
+                logger.warning(
+                    "⚠️  sqlcipher3 is not installed — database %s will NOT be encrypted.",
+                    self.db_path,
                 )
             else:
-                print(f"Unencrypted database {self.db_path} loaded securely.")
+                logger.info("Unencrypted database %s opened.", self.db_path)
             return
 
         if not db_key:
-            print(f"Unencrypted database {self.db_path} loaded securely.")
+            logger.info("Unencrypted database %s opened.", self.db_path)
             return
 
         # Apply SQLCipher key (escape embedded single quotes to avoid SQL
@@ -114,8 +116,12 @@ class MojoSkel:
                 f"Unable to decrypt database {self.db_path} with the provided key."
             ) from exc
 
-        print("Cipher:", self.cursor.execute("PRAGMA cipher_version;").fetchone()[0])
-        print(f"Encrypted database {self.db_path} loaded securely.")
+        cipher_version = self.cursor.execute("PRAGMA cipher_version;").fetchone()[0]
+        logger.info(
+            "Encrypted database %s opened with SQLCipher %s.",
+            self.db_path,
+            cipher_version,
+        )
 
     def __iter__(self) -> Iterator[RowType]:
         """
@@ -174,7 +180,7 @@ class MojoSkel:
         :return: An interator of dataclass objects for rows
         """
 
-        sql = f'SELECT * FROM "{self.table_name}"'
+        sql = f"SELECT * FROM {quote_name(self.table_name)}"
 
         cur = self.conn.cursor()
         cur.execute(sql)
@@ -194,7 +200,7 @@ class MojoSkel:
 
         :raises ValueError: If no table
         """
-        self.cursor.execute(f'PRAGMA table_info("{self.table_name}")')
+        self.cursor.execute(f"PRAGMA table_info({quote_name(self.table_name)})")
         cols = self.cursor.fetchall()
 
         if not cols:
@@ -224,11 +230,13 @@ class MojoSkel:
 
     def _drop_staging(self, staging: str) -> None:
         """Drop a staging table left behind by a failed import."""
-        self.conn.execute(f'DROP TABLE IF EXISTS "{staging}"')
+        self.conn.execute(f"DROP TABLE IF EXISTS {quote_name(staging)}")
 
     def _drop_stale_old(self) -> None:
         """Drop any '*_old' table left over from an interrupted previous import."""
-        self.conn.execute(f'DROP TABLE IF EXISTS "{self.table_name}_old"')
+        self.conn.execute(
+            f'DROP TABLE IF EXISTS {quote_name(self.table_name + "_old")}'
+        )
 
     def _swap_in_staging(self, staging: str) -> str:
         """
@@ -240,7 +248,9 @@ class MojoSkel:
         :return: The old table name, or "" if there was no previous table
         """
         if not self.table_exists():
-            self.conn.execute(f'ALTER TABLE "{staging}" RENAME TO "{self.table_name}"')
+            self.conn.execute(
+                f"ALTER TABLE {quote_name(staging)} RENAME TO {quote_name(self.table_name)}"
+            )
             return ""
 
         old_table = f"{self.table_name}_old"
@@ -252,17 +262,19 @@ class MojoSkel:
             result = self.cursor.fetchone()
             if result and result[0] == "view":
                 # Views can't be renamed; the base tables still hold the data.
-                self.conn.execute(f'DROP VIEW IF EXISTS "{self.table_name}"')
+                self.conn.execute(f"DROP VIEW IF EXISTS {quote_name(self.table_name)}")
             else:
                 self.conn.execute(
-                    f'ALTER TABLE "{self.table_name}" RENAME TO "{old_table}"'
+                    f"ALTER TABLE {quote_name(self.table_name)} RENAME TO {quote_name(old_table)}"
                 )
                 # The renamed table keeps its index names, which would collide
                 # with the indexes the promoted table will need (e.g.
                 # "members__member_number"). Drop them now; they are recreated
                 # on the promoted table by _ensure_indexes().
                 self._drop_table_indexes(old_table)
-            self.conn.execute(f'ALTER TABLE "{staging}" RENAME TO "{self.table_name}"')
+            self.conn.execute(
+                f"ALTER TABLE {quote_name(staging)} RENAME TO {quote_name(self.table_name)}"
+            )
             self.conn.execute("COMMIT")
         except BaseException:
             self.conn.execute("ROLLBACK")
@@ -279,7 +291,7 @@ class MojoSkel:
             (table_name,),
         )
         for (index_name,) in self.cursor.fetchall():
-            self.conn.execute(f'DROP INDEX "{index_name}"')
+            self.conn.execute(f"DROP INDEX {quote_name(index_name)}")
 
     def _ensure_indexes(self) -> None:
         """Create indexes for the current table if it exists."""
@@ -294,7 +306,7 @@ class MojoSkel:
         """
         try:
             # Diff old vs new (SQLCipher → sqlite3 → dataclasses)
-            diff_rows = mojo_loader.diff_cipher_tables(
+            diff_rows = mojo_loader.diff_tables(
                 self.conn,
                 new_table=self.table_name,
                 old_table=old_table,
@@ -307,7 +319,7 @@ class MojoSkel:
 
         finally:
             # Cleanup old table (always)
-            self.conn.execute(f'DROP TABLE IF EXISTS "{old_table}"')
+            self.conn.execute(f"DROP TABLE IF EXISTS {quote_name(old_table)}")
 
     def download_csv(
         self,
@@ -331,30 +343,17 @@ class MojoSkel:
         self._invalidate_caches()
         self._drop_stale_old()
         if merge:
-            ok = mojo_loader.download_csv_helper(
-                self.conn, self.table_name, url, session, merge=True
+            self._merge_into_table(
+                lambda: mojo_loader.download_csv_helper(
+                    self.conn, self.table_name, url, session, merge=True
+                )
             )
-            if ok:
-                self.row_class = self._build_dataclass_from_table()
-                self._ensure_indexes()
             return
 
-        staging = self._staging_name()
-        try:
-            ok = mojo_loader.download_csv_helper(self.conn, staging, url, session)
-        except BaseException:
-            self._drop_staging(staging)
-            self.conn.rollback()
-            raise
-        if not ok:
-            # Empty CSV — leave any existing table untouched.
-            self._drop_staging(staging)
-            return
-        old_table = self._swap_in_staging(staging)
-        self.row_class = self._build_dataclass_from_table()
-        self._ensure_indexes()
-        if old_table:
-            self.print_diff(old_table)
+        def load(staging: str) -> bool:
+            return mojo_loader.download_csv_helper(self.conn, staging, url, session)
+
+        self._replace_table(load)
 
     def import_csv(
         self, csv_path: Path, merge: bool = False, table_name: str | None = None
@@ -373,25 +372,57 @@ class MojoSkel:
         self._invalidate_caches()
         self._drop_stale_old()
         if merge:
-            mojo_loader.import_csv_helper(
-                self.conn, self.table_name, csv_path, merge=True
-            )
-            self.row_class = self._build_dataclass_from_table()
-            self._ensure_indexes()
+
+            def merge_load() -> bool:
+                mojo_loader.import_csv_helper(
+                    self.conn, self.table_name, csv_path, merge=True
+                )
+                return True
+
+            self._merge_into_table(merge_load)
             return
 
+        def load(staging: str) -> bool:
+            mojo_loader.import_csv_helper(self.conn, staging, csv_path)
+            return True
+
+        self._replace_table(load)
+
+    def _replace_table(self, load: Callable[[str], bool]) -> None:
+        """
+        Load data into a staging table, then swap it in place of the current table
+
+        The previous table is kept as '*_old' long enough to print a diff.
+
+        :param load: Imports data into the named staging table. Returns False
+            if there was no data, which leaves the existing table untouched.
+        """
         staging = self._staging_name()
         try:
-            mojo_loader.import_csv_helper(self.conn, staging, csv_path)
+            ok = load(staging)
         except BaseException:
             self._drop_staging(staging)
             self.conn.rollback()
             raise
+        if not ok:
+            self._drop_staging(staging)
+            return
         old_table = self._swap_in_staging(staging)
         self.row_class = self._build_dataclass_from_table()
         self._ensure_indexes()
         if old_table:
             self.print_diff(old_table)
+
+    def _merge_into_table(self, load: Callable[[], bool]) -> None:
+        """
+        Load data straight into the current table, appending to any existing rows
+
+        :param load: Imports data into the current table. Returns False if there
+            was no data, in which case the table is left as it is.
+        """
+        if load():
+            self.row_class = self._build_dataclass_from_table()
+            self._ensure_indexes()
 
     def show_table(self, limit: int = 2) -> None:
         """
@@ -400,7 +431,9 @@ class MojoSkel:
         :param limit: (optional) Number of rows to display. Defaults to 2
         """
         if self.table_exists():
-            self.cursor.execute(f'SELECT * FROM "{self.table_name}" LIMIT ?', (limit,))
+            self.cursor.execute(
+                f"SELECT * FROM {quote_name(self.table_name)} LIMIT ?", (limit,)
+            )
             rows = self.cursor.fetchall()
 
         else:
@@ -415,7 +448,7 @@ class MojoSkel:
         :return: count of the number of rows in the table, or 0 if no table
         """
         if self.table_exists():
-            self.cursor.execute(f'SELECT COUNT(*) FROM "{self.table_name}"')
+            self.cursor.execute(f"SELECT COUNT(*) FROM {quote_name(self.table_name)}")
             result = self.cursor.fetchone()
             return int(result[0]) if result else 0
 
@@ -507,26 +540,21 @@ class MojoSkel:
         else:
             values.append(val)
 
-    def create_joined_table(
-        self,
-        table_name: str,
-        join_table: str,
-        join_col: str = "payment_id",
-        is_view: bool = True,
-    ) -> None:
+    def _join_select_clause(self, join_table: str, join_col: str) -> str:
         """
-        Create a View or Table that joins the current table with another table
+        Build the SELECT list for a join: all of this table, plus join_table's columns
 
-        :param table_name: Name of the view or table to create
-        :param join_table: Name of the table to join with
-        :param join_col: (optional) Column name to join on. Defaults to "payment_id"
-        :param is_view: (optional) If True, create a VIEW, otherwise a TABLE.
-            Defaults to True.
+        Columns that also exist here are aliased as item_<name>, and redundant
+        personal info columns are skipped.
+
+        :param join_table: Name of the table being joined
+        :param join_col: Column the tables are joined on, not repeated in the output
+
+        :return: The SQL select list
         """
-        # Get column names for both tables
-        self.cursor.execute(f"PRAGMA table_info({_q(self.table_name)})")
+        self.cursor.execute(f"PRAGMA table_info({quote_name(self.table_name)})")
         cols1 = {row[1] for row in self.cursor.fetchall()}
-        self.cursor.execute(f"PRAGMA table_info({_q(join_table)})")
+        self.cursor.execute(f"PRAGMA table_info({quote_name(join_table)})")
         cols2 = [row[1] for row in self.cursor.fetchall()]
 
         # Skip redundant personal info columns that are likely identical
@@ -544,23 +572,46 @@ class MojoSkel:
             if c == join_col or c in skip_cols:
                 continue
             if c in cols1:
-                other_cols.append(f"{_q(join_table)}.{_q(c)} AS {_q(f'item_{c}')}")
+                other_cols.append(
+                    f"{quote_name(join_table)}.{quote_name(c)} AS {quote_name(f'item_{c}')}"
+                )
             else:
-                other_cols.append(f"{_q(join_table)}.{_q(c)}")
+                other_cols.append(f"{quote_name(join_table)}.{quote_name(c)}")
 
         # Select all from table1, plus specific columns from table2
-        select_clause = f"{_q(self.table_name)}.*"
+        select_clause = f"{quote_name(self.table_name)}.*"
         if other_cols:
             select_clause += ", " + ", ".join(other_cols)
+        return select_clause
 
+    def create_joined_table(
+        self,
+        table_name: str,
+        join_table: str,
+        join_col: str = "payment_id",
+        is_view: bool = True,
+    ) -> None:
+        """
+        Create a View or Table that joins the current table with another table
+
+        :param table_name: Name of the view or table to create
+        :param join_table: Name of the table to join with
+        :param join_col: (optional) Column name to join on. Defaults to "payment_id"
+        :param is_view: (optional) If True, create a VIEW, otherwise a TABLE.
+            Defaults to True.
+        """
+        select_clause = self._join_select_clause(join_table, join_col)
         type_str = "VIEW" if is_view else "TABLE"
 
+        left = quote_name(self.table_name)
+        right = quote_name(join_table)
+        key = quote_name(join_col)
         sql = f"""
-            CREATE {type_str} {_q(table_name)} AS
+            CREATE {type_str} {quote_name(table_name)} AS
             SELECT {select_clause}
-            FROM {_q(self.table_name)}
-            LEFT JOIN {_q(join_table)}
-            ON {_q(self.table_name)}.{_q(join_col)} = {_q(join_table)}.{_q(join_col)}
+            FROM {left}
+            LEFT JOIN {right}
+            ON {left}.{key} = {right}.{key}
         """
         # Drop existing object based on its type to avoid OperationalError
         self.cursor.execute(
@@ -569,9 +620,9 @@ class MojoSkel:
         result = self.cursor.fetchone()
         if result:
             if result[0] == "view":
-                self.conn.execute(f'DROP VIEW IF EXISTS "{table_name}"')
+                self.conn.execute(f"DROP VIEW IF EXISTS {quote_name(table_name)}")
             else:
-                self.conn.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+                self.conn.execute(f"DROP TABLE IF EXISTS {quote_name(table_name)}")
 
         self.conn.execute(sql)
         self.conn.commit()
@@ -631,12 +682,9 @@ class MojoSkel:
         conditions, values = self._build_query_conditions(match_dict)
 
         # Base query string
-        base_query = (
-            f'SELECT * FROM "{self.table_name}" WHERE {" AND ".join(conditions)}'
-        )
+        base_query = f'SELECT * FROM {quote_name(self.table_name)} WHERE {" AND ".join(conditions)}'
         if self.debug:
-            print("Sql:")
-            pprint(base_query)
+            logger.debug("Sql: %r", base_query)
 
         if only_one:
             query = base_query + " LIMIT 1"
@@ -648,18 +696,40 @@ class MojoSkel:
         self.cursor.execute(base_query, values)
         return [self._row_to_obj(row) for row in self.cursor.fetchall()]
 
-    def run_count_query(self, sql: str, params: tuple[Any, ...]) -> int:
+    def count_rows(
+        self,
+        match_dict: dict[str, Any] | None = None,
+        any_of: Sequence[dict[str, Any]] = (),
+    ) -> int:
         """
-        Generate whole sql query for running on db table for counting and run
+        Count rows matching all of match_dict and, if given, any one of any_of
 
-        :param sql: the sqlite query for matching rows
-        :param params: the paramaters to use for the query
+        Uses the same matching rules as get_row_multi, including Like and
+        DateRange markers and None or "" for IS NULL.
 
-        :return: number of matching rows
+        :param match_dict: (optional) column=value pairs that must all match
+        :param any_of: (optional) alternative match_dicts; a row counts when
+            every pair in at least one alternative matches
+
+        :return: number of matching rows, or 0 if the table does not exist
         """
-        sql_query = f'SELECT count(*) FROM "{self.table_name}" {sql}'
-        cursor = self.cursor.execute(sql_query, params)
-        row = cursor.fetchone()
+        if not self.table_exists():
+            return 0
+
+        conditions, values = self._build_query_conditions(match_dict or {})
+        if any_of:
+            alternatives: list[str] = []
+            for alternative in any_of:
+                alt_conditions, alt_values = self._build_query_conditions(alternative)
+                alternatives.append(f"({' AND '.join(alt_conditions) or '1'})")
+                values.extend(alt_values)
+            conditions.append(f"({' OR '.join(alternatives)})")
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        self.cursor.execute(
+            f"SELECT COUNT(*) FROM {quote_name(self.table_name)} {where}", values
+        )
+        row = self.cursor.fetchone()
         return int(row[0]) if row else 0
 
     def table_exists(self) -> bool:
@@ -684,7 +754,7 @@ class MojoSkel:
         """
         columns = self._column_cache.get(self.table_name)
         if columns is None:
-            self.cursor.execute(f'PRAGMA table_info("{self.table_name}")')
+            self.cursor.execute(f"PRAGMA table_info({quote_name(self.table_name)})")
             columns = {row[1] for row in self.cursor.fetchall()}
             self._column_cache[self.table_name] = columns
 
@@ -693,4 +763,4 @@ class MojoSkel:
                 f"Unknown column '{identifier}' for table '{self.table_name}'"
             )
 
-        return _q(identifier)
+        return quote_name(identifier)
