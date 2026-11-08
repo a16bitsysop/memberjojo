@@ -8,6 +8,9 @@ on:
 jobs:
   lint_pytest:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.12', '3.x']
 
     steps:
       - name: 📥 Checkout repository
@@ -16,7 +19,7 @@ jobs:
       - name: 🐍 Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: '3.x'
+          python-version: ${{ matrix.python-version }}
 
       - name: 🛠️ Install build deps
         run: pip install ".[dev,lint]"

@@ -72,11 +72,6 @@ class URL:
         return f"{self.membership}/download_pending_approval_members"
 
     @property
-    def pending_aproval(self) -> str:
-        """Deprecated alias for :attr:`pending_approval` (was misspelled)."""
-        return self.pending_approval
-
-    @property
     def pending_completion(self) -> str:
         """Returns the members pending completion URL"""
         return f"{self.membership}/download_pending_completion_members"

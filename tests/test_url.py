@@ -84,13 +84,6 @@ def test_pending_properties(url):
     )
 
 
-def test_pending_aproval_alias(url):
-    """
-    The old misspelled pending_aproval property is kept as a deprecated alias
-    """
-    assert url.pending_aproval == url.pending_approval
-
-
 def test_test_property(url):
     """
     test should point at the membership page used for login verification

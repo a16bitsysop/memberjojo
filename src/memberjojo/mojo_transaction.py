@@ -6,6 +6,7 @@ helper methods for querying the database
 """
 
 from pathlib import Path
+from typing import override
 
 import requests
 
@@ -39,6 +40,7 @@ class Transaction(MojoSkel):
         # Automatically try to link if we are loading an existing DB
         self.link_items()
 
+    @override
     def import_csv(
         self,
         csv_path: Path,
@@ -58,6 +60,7 @@ class Transaction(MojoSkel):
         if table_name:
             self.set_table(table_name)
 
+    @override
     def download_csv(
         self,
         session: requests.Session,

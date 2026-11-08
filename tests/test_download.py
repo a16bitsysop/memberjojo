@@ -2,6 +2,7 @@
 Tests for the Download module, mocking network and interactive input.
 """
 
+import logging
 from http.cookiejar import Cookie, MozillaCookieJar
 from unittest import mock
 
@@ -108,12 +109,13 @@ def test_mojo_login_no_cookies_with_verify(download):
     """
     with (
         mock.patch.object(download, "trigger_email") as mock_trigger,
-        mock.patch.object(download.session, "post"),
+        mock.patch.object(download.session, "post") as mock_post,
         mock.patch.object(download.session, "get") as mock_get,
     ):
         mock_get.return_value = mock.Mock(text="<html>dashboard</html>")
         download.mojo_login({"email": "e", "password": "p"}, email_verify=True)
         mock_trigger.assert_called_once_with({"email": "e", "password": "p"})
+        mock_post.assert_not_called()
 
 
 def test_mojo_login_login_page_no_verify(download):
@@ -170,6 +172,58 @@ def test_trigger_email_success(download):
         mock.patch("builtins.input", return_value="https://verify.example/link"),
     ):
         download.trigger_email({"email": "e"})
+
+
+@pytest.mark.parametrize("debug", [False, True])
+def test_trigger_email_logs_sensitive_output_only_in_debug(download, caplog, debug):
+    """
+    The CSRF token is only logged when debug is on
+    """
+    caplog.set_level(logging.DEBUG, logger="memberjojo.download")
+    download.debug = debug
+    download.session.cookies.clear()
+    login_response = mock.Mock()
+    login_response.text = "check your email"
+    homepage = mock.Mock(text='{"csrf_token":"tok123"}')
+    verify_response = mock.Mock(ok=True)
+    posts = {
+        download.url.login: login_response,
+        "https://verify.example/link": verify_response,
+    }
+
+    def fake_post(url, data=None, **kwargs):  # pylint: disable=unused-argument
+        return posts[url]
+
+    with (
+        mock.patch.object(download.session, "post", side_effect=fake_post),
+        mock.patch.object(download.session, "get", return_value=homepage),
+        mock.patch("builtins.input", return_value="https://verify.example/link"),
+    ):
+        download.trigger_email({"email": "e"})
+
+    assert ("tok123" in caplog.text) is debug
+
+
+@pytest.mark.parametrize("debug", [False, True])
+def test_trigger_email_login_failed_body_only_in_debug(download, caplog, debug):
+    """
+    The failed login page body is only logged when debug is on
+    """
+    caplog.set_level(logging.DEBUG, logger="memberjojo.download")
+    download.debug = debug
+    download.session.cookies.clear()
+    login_response = mock.Mock()
+    login_response.text = "secret-page-body"
+    login_response.ok = False
+
+    with (
+        mock.patch.object(download.session, "post", return_value=login_response),
+        mock.patch.object(download.session, "get"),
+        pytest.raises(ValueError, match="Failed to submit login form"),
+    ):
+        download.trigger_email({"email": "e"})
+
+    assert ("secret-page-body" in caplog.text) is debug
 
 
 def test_trigger_email_missing_csrf(download):

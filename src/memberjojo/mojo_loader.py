@@ -11,10 +11,13 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, cast
 
+import logging
 import re
 import sqlite3 as sqlite3_builtin
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -42,7 +45,7 @@ INDEXABLE_COLUMNS = (
 )
 
 
-def _quote(name: str) -> str:
+def quote_name(name: str) -> str:
     """Return an identifier safely double-quoted for interpolation in SQL."""
     return '"' + name.replace('"', '""') + '"'
 
@@ -179,10 +182,10 @@ def _create_table_from_columns(table_name: str, columns: dict[str, str]) -> str:
     col_defs = ["rowid INTEGER PRIMARY KEY AUTOINCREMENT"]
 
     for col, col_type in columns.items():
-        col_defs.append(f"{_quote(col)} {col_type}")
+        col_defs.append(f"{quote_name(col)} {col_type}")
 
     return (
-        f"CREATE TABLE IF NOT EXISTS {_quote(table_name)} (\n"
+        f"CREATE TABLE IF NOT EXISTS {quote_name(table_name)} (\n"
         + ",\n".join(col_defs)
         + "\n)"
     )
@@ -217,13 +220,13 @@ def create_indexes(conn: sqlite3_builtin.Connection, table_name: str) -> None:
     """
     cursor = conn.cursor()
     try:
-        cursor.execute(f"PRAGMA table_info({_quote(table_name)})")
+        cursor.execute(f"PRAGMA table_info({quote_name(table_name)})")
         existing = {row[1] for row in cursor.fetchall()}
         for col in INDEXABLE_COLUMNS:
             if col in existing:
                 cursor.execute(
-                    f"CREATE INDEX IF NOT EXISTS {_quote(table_name + '__' + col)} "
-                    f"ON {_quote(table_name)} ({_quote(col)} COLLATE NOCASE)"
+                    f"CREATE INDEX IF NOT EXISTS {quote_name(table_name + '__' + col)} "
+                    f"ON {quote_name(table_name)} ({quote_name(col)} COLLATE NOCASE)"
                 )
     finally:
         cursor.close()
@@ -267,6 +270,50 @@ def _process_row(
     return values
 
 
+MERGE_KEY = "membermojo_id"
+
+
+def _skip_existing_rows(
+    cursor: sqlite3_builtin.Cursor,
+    table_name: str,
+    reader: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """
+    Drop rows whose membermojo_id is already in the table, or repeated in reader
+
+    Rows without a membermojo_id are kept. If either the table or the CSV has no
+    membermojo_id column, every row is kept.
+
+    :param cursor: SQLite cursor of the database holding table_name
+    :param table_name: Name of the table being merged into
+    :param reader: A list of dict objects to filter
+
+    :return: The rows that are not already present
+    """
+    key_col = next((c for c in reader[0] if _normalize(c) == MERGE_KEY), None)
+    cursor.execute(f"PRAGMA table_info({quote_name(table_name)})")
+    table_cols = {row[1] for row in cursor.fetchall()}
+    if key_col is None or MERGE_KEY not in table_cols:
+        return reader
+
+    cursor.execute(f"SELECT {quote_name(MERGE_KEY)} FROM {quote_name(table_name)}")
+    seen = {str(row[0]).strip() for row in cursor.fetchall() if row[0] is not None}
+
+    fresh: list[dict[str, Any]] = []
+    for row in reader:
+        key = str(row[key_col] or "").strip()
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        fresh.append(row)
+
+    skipped = len(reader) - len(fresh)
+    if skipped:
+        logger.info("Skipped %d rows already in %s", skipped, table_name)
+    return fresh
+
+
 def import_data(
     conn: sqlite3_builtin.Connection,
     table_name: str,
@@ -275,6 +322,9 @@ def import_data(
 ) -> None:
     """
     Import data in the list of dicts into the SQLite3 database at conn
+
+    When merging into an existing table, rows whose membermojo_id is already
+    present are skipped.
 
     :param conn: SQLite database connection to use
     :param table_name: Name of the table to import into
@@ -286,26 +336,44 @@ def import_data(
     inferred_cols = infer_columns_from_rows(reader)
     if not merge or not table_exists(cursor, table_name):
         # Drop existing table
-        cursor.execute(f"DROP TABLE IF EXISTS {_quote(table_name)};")
+        cursor.execute(f"DROP TABLE IF EXISTS {quote_name(table_name)};")
         # Create table
         create_sql = _create_table_from_columns(table_name, inferred_cols)
         cursor.execute(create_sql)
+    else:
+        reader = _skip_existing_rows(cursor, table_name, reader)
 
-    # Insert rows
-    cols = list(reader[0].keys())
-    norm_map = {c: _normalize(c) for c in cols}
-    colnames = ",".join(_quote(norm_map[c]) for c in cols)
-    placeholders = ",".join("?" for _ in cols)
-    insert_sql = (
-        f"INSERT INTO {_quote(table_name)} ({colnames}) VALUES ({placeholders})"
-    )
-
-    for row in reader:
-        values = _process_row(row, cols, norm_map, inferred_cols)
-        cursor.execute(insert_sql, values)
+    if reader:
+        _insert_rows(cursor, table_name, reader, inferred_cols)
 
     cursor.close()
     conn.commit()
+
+
+def _insert_rows(
+    cursor: sqlite3_builtin.Cursor,
+    table_name: str,
+    reader: list[dict[str, Any]],
+    inferred_cols: dict[str, str],
+) -> None:
+    """
+    Insert rows into table_name, with values processed by _process_row
+
+    :param cursor: SQLite cursor of the database holding table_name
+    :param table_name: Name of the table to insert into
+    :param reader: A non-empty list of dict objects to insert
+    :param inferred_cols: Normalized column name to SQLite type mapping
+    """
+    cols = list(reader[0].keys())
+    norm_map = {c: _normalize(c) for c in cols}
+    colnames = ",".join(quote_name(norm_map[c]) for c in cols)
+    placeholders = ",".join("?" for _ in cols)
+    insert_sql = (
+        f"INSERT INTO {quote_name(table_name)} ({colnames}) VALUES ({placeholders})"
+    )
+
+    rows = [_process_row(row, cols, norm_map, inferred_cols) for row in reader]
+    cursor.executemany(insert_sql, rows)
 
 
 def import_csv_helper(
@@ -355,7 +423,7 @@ def _diffrow_from_sql_row(row: sqlite3_builtin.Row) -> DiffRow:
     )
 
 
-def diff_cipher_tables(
+def diff_tables(
     conn: sqlite3_builtin.Connection,
     *,
     new_table: str,
@@ -409,8 +477,8 @@ def _generate_sql_diff(
     """
     # pylint: disable=too-many-locals
 
-    new_q = _quote(new_table)
-    old_q = _quote(old_table)
+    new_q = quote_name(new_table)
+    old_q = quote_name(old_table)
 
     # Introspect schemas (order-preserving)
     cols_new = [
@@ -441,21 +509,21 @@ def _generate_sql_diff(
     else:
         key = common_cols[0]
 
-    key_q = _quote(key)
+    key_q = quote_name(key)
     non_key_cols = [c for c in common_cols if c != key]
 
     # Preview columns (key first, then others for readability)
     preview_cols = [key] + non_key_cols[:5]
 
-    new_preview = ", ".join(f"n.{_quote(c)}" for c in preview_cols)
-    old_preview = ", ".join(f"o.{_quote(c)}" for c in preview_cols)
+    new_preview = ", ".join(f"n.{quote_name(c)}" for c in preview_cols)
+    old_preview = ", ".join(f"o.{quote_name(c)}" for c in preview_cols)
 
     # Row-value comparison (NULL-safe)
     if non_key_cols:
         changed_predicate = (
-            f"({', '.join(f'n.{_quote(c)}' for c in non_key_cols)}) "
+            f"({', '.join(f'n.{quote_name(c)}' for c in non_key_cols)}) "
             f"IS NOT "
-            f"({', '.join(f'o.{_quote(c)}' for c in non_key_cols)})"
+            f"({', '.join(f'o.{quote_name(c)}' for c in non_key_cols)})"
         )
     else:
         # Key-only table
@@ -512,7 +580,7 @@ def download_csv_helper(
     :return: True if the CSV was downloaded and imported, False if empty
     """
 
-    print(f"☁️ Downloading from: {url}")
+    logger.info("☁️ Downloading from: %s", url)
 
     # Enable streaming
     with session.get(url, stream=True) as resp:
@@ -533,9 +601,9 @@ def download_csv_helper(
 
         reader = list(DictReader(string_buffer))
         if reader:
-            print(f"✅ Downloaded with encoding {resp.encoding}.")
+            logger.info("✅ Downloaded with encoding %s.", resp.encoding)
             import_data(conn, table_name, reader, merge=merge)
             return True
 
-    print("   ⚠️ CSV is empty ⚠️")
+    logger.warning("⚠️ CSV is empty ⚠️")
     return False

@@ -2,11 +2,13 @@
 Tests for the member module
 """
 
+import logging
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import pytest
 from memberjojo import Member
+from memberjojo.mojo_member import _passes_name_guards
 from .utils import get_db_path, get_sample_members, setup_mock_csv
 
 # pylint: disable=redefined-outer-name
@@ -233,27 +235,27 @@ def test_get_fuzz_name_silent_by_default(member_db, capsys):
     assert captured.out == ""
 
 
-def test_get_fuzz_name_debug_prints_extra_info(member_db, capsys):
+def test_get_fuzz_name_debug_logs_extra_info(member_db, caplog):
     """
-    In debug mode the match and extra details are printed.
+    In debug mode the match and extra details are logged at debug level.
     """
+    caplog.set_level(logging.DEBUG, logger="memberjojo.mojo_member")
     member_db.debug = True
     member_db.get_fuzz_name("Jon Do")
-    captured = capsys.readouterr()
-    assert "Jon Do" in captured.out
-    assert "John Doe" in captured.out
-    assert "Match ratio" in captured.out
-    assert "Candidates considered" in captured.out
+    assert "Jon Do" in caplog.text
+    assert "John Doe" in caplog.text
+    assert "Match ratio" in caplog.text
+    assert "Candidates considered" in caplog.text
 
 
-def test_get_fuzz_name_no_match_debug_prints_message(member_db, capsys):
+def test_get_fuzz_name_no_match_debug_logs_message(member_db, caplog):
     """
     In debug mode a lookup with no match reports that nothing was found.
     """
+    caplog.set_level(logging.DEBUG, logger="memberjojo.mojo_member")
     member_db.debug = True
     assert member_db.get_fuzz_name("xyz123notfound") is None
-    captured = capsys.readouterr()
-    assert "No fuzzy name match found" in captured.out
+    assert "No fuzzy name match found" in caplog.text
 
 
 def test_get_fuzz_name_prevents_false_positive_different_surname(member_db):
@@ -288,6 +290,42 @@ def test_member_count(member_db):
     """
     assert member_db.member_type_count("half") == 2
     assert member_db.member_type_count("noop") == 0
+
+
+def test_count_rows_matches_get_row_multi(member_db):
+    """
+    count_rows with no arguments counts the whole table
+    """
+    assert member_db.count_rows() == member_db.count()
+    assert member_db.count_rows({"membership": "Full"}) == len(
+        member_db.get_row_multi({"membership": "Full"}, only_one=False)
+    )
+
+
+def test_count_rows_any_of_and_match_dict(member_db):
+    """
+    count_rows ANDs match_dict with the any_of alternatives
+    """
+    assert (
+        member_db.count_rows(any_of=[{"membership": "Half"}, {"first_name": "x"}]) == 2
+    )
+    assert (
+        member_db.count_rows({"first_name": "Rick"}, any_of=[{"membership": "Half"}])
+        == 1
+    )
+    assert (
+        member_db.count_rows({"first_name": "Rick"}, any_of=[{"membership": "Full"}])
+        == 0
+    )
+
+
+def test_count_rows_missing_table(member_db):
+    """
+    count_rows returns 0 when the table does not exist
+    """
+    member_db.set_table("missing_table")
+    assert member_db.count_rows() == 0
+    assert member_db.count_rows({"membership": "Full"}, any_of=[{}]) == 0
 
 
 def test_get_number_first_last_debug(member_db):
@@ -418,3 +456,23 @@ def test_get_fuzz_name_drops_surname_mismatch(surname_drop_db):
     should be rejected
     """
     assert surname_drop_db.get_fuzz_name("John Michael Smith") is None
+
+
+@pytest.mark.parametrize(
+    "input_first, input_last, cand_first, cand_last, expected",
+    [
+        ("emily", "stone", "Emily", "Stone", True),
+        ("emily", "stonmembership", "Emily", "Stone", True),
+        ("e", "stone", "Emily", "Stone", True),
+        ("sara", "stone", "Emily", "Stone", False),
+        ("emily", "grimes", "Emily", "Stone", False),
+        ("", "stone", "", "Stone", True),
+    ],
+)
+def test_passes_name_guards(input_first, input_last, cand_first, cand_last, expected):
+    """
+    Per-field guards accept close last names and first name or initial matches
+    """
+    assert (
+        _passes_name_guards(input_first, input_last, cand_first, cand_last) is expected
+    )
